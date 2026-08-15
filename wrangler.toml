@@ -1,0 +1,4 @@
+name = "brazil-2d"
+main = "worker.js"
+compatibility_date = "2026-08-15"
+workers_dev = true
