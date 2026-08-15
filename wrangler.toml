@@ -2,3 +2,8 @@ name = "brazil-2d"
 main = "worker.js"
 compatibility_date = "2026-08-15"
 workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "brazil-2d-db"
+database_id = "fed5dba1-68fd-46f1-b3c9-7f4ae0af83a0"
