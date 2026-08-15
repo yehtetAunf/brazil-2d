@@ -3,18 +3,22 @@ export default {
     const url = new URL(request.url);
 
     try {
-      // =========================
-      // MAIN PAGE
-      // =========================
+
+      // =====================================================
+      // USER MAIN PAGE
+      // =====================================================
       if (url.pathname === "/" && request.method === "GET") {
         return html(await mainPage(env.DB));
       }
 
-      // =========================
+      // =====================================================
       // LIVE API
-      // =========================
-      if (url.pathname === "/api/today" && request.method === "GET") {
-        const data = await getTodayData(env.DB);
+      // =====================================================
+      if (
+        (url.pathname === "/api/live" || url.pathname === "/api/today") &&
+        request.method === "GET"
+      ) {
+        const data = await getLiveData(env.DB);
 
         return new Response(JSON.stringify(data), {
           headers: {
@@ -24,16 +28,16 @@ export default {
         });
       }
 
-      // =========================
+      // =====================================================
       // HISTORY
-      // =========================
+      // =====================================================
       if (url.pathname === "/history" && request.method === "GET") {
         return html(await historyPage(env.DB));
       }
 
-      // =========================
-      // ADMIN
-      // =========================
+      // =====================================================
+      // ADMIN PAGE
+      // =====================================================
       if (url.pathname === "/admin" && request.method === "GET") {
         const loggedIn = await isAdmin(request, env);
 
@@ -41,19 +45,19 @@ export default {
           return html(adminLoginPage());
         }
 
-        return html(await adminPage(env.DB));
+        return html(await adminPage(env.DB, url.searchParams.get("date")));
       }
 
-      // =========================
+      // =====================================================
       // ADMIN LOGIN
-      // =========================
+      // =====================================================
       if (url.pathname === "/admin/login" && request.method === "POST") {
         return await adminLogin(request, env);
       }
 
-      // =========================
+      // =====================================================
       // ADMIN LOGOUT
-      // =========================
+      // =====================================================
       if (url.pathname === "/admin/logout") {
         return new Response(null, {
           status: 302,
@@ -65,9 +69,9 @@ export default {
         });
       }
 
-      // =========================
-      // SAVE RESULTS
-      // =========================
+      // =====================================================
+      // ADMIN SAVE
+      // =====================================================
       if (url.pathname === "/admin/save" && request.method === "POST") {
         const loggedIn = await isAdmin(request, env);
 
@@ -101,51 +105,51 @@ export default {
 
 
 // ============================================================
-// ROUND SETTINGS
+// 6 ROUND SETTINGS
 // ============================================================
 
 const ROUNDS = [
   {
     time: "11:00 AM",
     minutes: 11 * 60,
-    color: "green",
     field: "r1100",
-    id: "r1100"
+    id: "r1100",
+    color: "green"
   },
   {
     time: "01:00 PM",
     minutes: 13 * 60,
-    color: "yellow",
     field: "r1300",
-    id: "r1300"
+    id: "r1300",
+    color: "yellow"
   },
   {
     time: "03:00 PM",
     minutes: 15 * 60,
-    color: "blue",
     field: "r1500",
-    id: "r1500"
+    id: "r1500",
+    color: "blue"
   },
   {
     time: "05:00 PM",
     minutes: 17 * 60,
-    color: "green",
     field: "r1700",
-    id: "r1700"
+    id: "r1700",
+    color: "green"
   },
   {
     time: "07:00 PM",
     minutes: 19 * 60,
-    color: "yellow",
     field: "r1900",
-    id: "r1900"
+    id: "r1900",
+    color: "yellow"
   },
   {
     time: "09:00 PM",
     minutes: 21 * 60,
-    color: "blue",
     field: "r2100",
-    id: "r2100"
+    id: "r2100",
+    color: "blue"
   }
 ];
 
@@ -154,13 +158,12 @@ const ROUNDS = [
 // BASIC HELPERS
 // ============================================================
 
-function html(content, status = 200, extraHeaders = {}) {
+function html(content, status = 200) {
   return new Response(content, {
     status,
     headers: {
       "Content-Type": "text/html; charset=UTF-8",
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-      ...extraHeaders
+      "Cache-Control": "no-store, no-cache, must-revalidate"
     }
   });
 }
@@ -201,11 +204,17 @@ function getYangonParts() {
     }
   }
 
+  let hour = Number(values.hour);
+
+  if (hour === 24) {
+    hour = 0;
+  }
+
   return {
     year: Number(values.year),
     month: Number(values.month),
     day: Number(values.day),
-    hour: Number(values.hour),
+    hour,
     minute: Number(values.minute),
     second: Number(values.second)
   };
@@ -228,17 +237,12 @@ function getMyanmarDate() {
 function getCurrentMinutes() {
   const p = getYangonParts();
 
-  return (
-    p.hour * 60 +
-    p.minute
-  );
+  return p.hour * 60 + p.minute;
 }
 
 
 function valid2D(value) {
-  return /^[0-9]{2}$/.test(
-    String(value || "")
-  );
+  return /^[0-9]{2}$/.test(String(value || ""));
 }
 
 
@@ -287,15 +291,12 @@ function arrayBufferToBase64Url(buffer) {
 
 
 function getCookie(request, name) {
-  const cookie =
-    request.headers.get("Cookie") || "";
+  const cookie = request.headers.get("Cookie") || "";
 
-  const pieces =
-    cookie.split(";");
+  const pieces = cookie.split(";");
 
   for (const piece of pieces) {
-    const [key, ...rest] =
-      piece.trim().split("=");
+    const [key, ...rest] = piece.trim().split("=");
 
     if (key === name) {
       return rest.join("=");
@@ -311,20 +312,12 @@ async function createAdminToken(secret) {
     Date.now() +
     12 * 60 * 60 * 1000;
 
-  const data =
-    String(expires);
+  const data = String(expires);
 
   const signature =
-    await createSignature(
-      data,
-      secret
-    );
+    await createSignature(data, secret);
 
-  return (
-    data +
-    "." +
-    signature
-  );
+  return data + "." + signature;
 }
 
 
@@ -334,32 +327,22 @@ async function isAdmin(request, env) {
   }
 
   const token =
-    getCookie(
-      request,
-      "brazil_admin"
-    );
+    getCookie(request, "brazil_admin");
 
   if (!token) {
     return false;
   }
 
-  const pieces =
-    token.split(".");
+  const pieces = token.split(".");
 
   if (pieces.length !== 2) {
     return false;
   }
 
-  const expires =
-    pieces[0];
+  const expires = pieces[0];
+  const signature = pieces[1];
 
-  const signature =
-    pieces[1];
-
-  if (
-    Number(expires) <
-    Date.now()
-  ) {
+  if (Number(expires) < Date.now()) {
     return false;
   }
 
@@ -369,30 +352,22 @@ async function isAdmin(request, env) {
       env.ADMIN_PASSWORD
     );
 
-  return (
-    signature ===
-    expected
-  );
+  return signature === expected;
 }
 
 
 async function adminLogin(request, env) {
-  const form =
-    await request.formData();
+  const form = await request.formData();
 
   const password =
-    String(
-      form.get("password") || ""
-    );
+    String(form.get("password") || "");
 
   if (
     !env.ADMIN_PASSWORD ||
     password !== env.ADMIN_PASSWORD
   ) {
     return html(
-      adminLoginPage(
-        "Wrong password."
-      ),
+      adminLoginPage("Wrong password."),
       401
     );
   }
@@ -421,10 +396,10 @@ async function adminLogin(request, env) {
 
 
 // ============================================================
-// GET TODAY DATA
+// LIVE DATA API
 // ============================================================
 
-async function getTodayData(DB) {
+async function getLiveData(DB) {
   const today =
     getMyanmarDate();
 
@@ -447,84 +422,101 @@ async function getTodayData(DB) {
   const rows =
     query.results || [];
 
-  const databaseMap = {};
+  const map = {};
 
   let setValue = "--";
   let marketValue = "--";
 
   for (const row of rows) {
-    databaseMap[row.round_time] =
-      row;
+    map[row.round_time] = row;
 
     if (row.set_value) {
-      setValue =
-        row.set_value;
+      setValue = row.set_value;
     }
 
     if (row.market_value) {
-      marketValue =
-        row.market_value;
+      marketValue = row.market_value;
     }
   }
 
-
-  const results = {};
+  const releasedResults = {};
 
   let liveResult = "--";
-
+  let activeRound = null;
+  let nextRound = null;
 
   for (const round of ROUNDS) {
-    const row =
-      databaseMap[round.time];
+    const row = map[round.time];
 
-    const reached =
-      currentMinutes >=
-      round.minutes;
+    if (currentMinutes >= round.minutes) {
 
-    if (
-      reached &&
-      row &&
-      valid2D(row.result)
-    ) {
-      results[round.id] =
-        row.result;
+      if (
+        row &&
+        valid2D(row.result)
+      ) {
+        releasedResults[round.id] =
+          row.result;
 
-      liveResult =
-        row.result;
+        liveResult =
+          row.result;
+
+        activeRound =
+          round.time;
+      } else {
+        releasedResults[round.id] =
+          "--";
+      }
+
     } else {
-      results[round.id] =
+
+      releasedResults[round.id] =
         "--";
+
+      if (!nextRound) {
+        nextRound =
+          round.time;
+      }
     }
   }
-
 
   return {
     date: today,
+
+    result: liveResult,
+
+    round_time: activeRound,
+
+    next_round: nextRound,
+
     set: setValue,
+
     value: marketValue,
-    live: liveResult,
-    results
+
+    results: releasedResults,
+
+    server_minutes:
+      currentMinutes
   };
 }
 
 
 // ============================================================
-// MAIN PAGE
+// MAIN USER PAGE
 // ============================================================
 
 async function mainPage(DB) {
   const data =
-    await getTodayData(DB);
+    await getLiveData(DB);
 
-  let firstDigit = "-";
-  let secondDigit = "-";
+  let firstDigit = "";
+  let secondDigit = "";
 
-  if (valid2D(data.live)) {
+  if (valid2D(data.result)) {
     firstDigit =
-      data.live.charAt(0);
+      data.result.charAt(0);
 
     secondDigit =
-      data.live.charAt(1);
+      data.result.charAt(1);
   }
 
   return `<!DOCTYPE html>
@@ -565,24 +557,27 @@ body {
   min-height: 100dvh;
   margin: 0 auto;
   background: #fff;
-  position: relative;
   overflow: hidden;
 }
 
 
-/* =========================
-   LIVE HEADER
-========================= */
+/* ========================================================
+   TOP
+======================================================== */
 
 .live-header {
   height: 58px;
-  padding: 8px 18px;
+
+  padding:
+    8px
+    18px;
 
   display: flex;
-  align-items: center;
-  justify-content: space-between;
 
-  background: #fff;
+  align-items: center;
+
+  justify-content:
+    space-between;
 }
 
 .brand {
@@ -606,13 +601,17 @@ body {
 
 .live-pill {
   background: #e2f5e9;
+
   color: #078f40;
 
-  padding: 9px 12px;
+  padding:
+    9px
+    12px;
 
   border-radius: 26px;
 
   font-size: 11px;
+
   font-weight: 900;
 
   white-space: nowrap;
@@ -639,6 +638,7 @@ body {
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     opacity: 1;
@@ -650,9 +650,9 @@ body {
 }
 
 
-/* =========================
+/* ========================================================
    HERO
-========================= */
+======================================================== */
 
 .hero {
   position: relative;
@@ -674,7 +674,7 @@ body {
       rgba(16,148,71,.08),
       transparent 22%
     ),
-    #fff;
+    #ffffff;
 }
 
 .hero::after {
@@ -715,17 +715,18 @@ body {
 
   justify-content: center;
 
-  padding-bottom: 38px;
+  padding-bottom: 36px;
 }
 
 
-/* =========================
+/* ========================================================
    BIG LIVE RESULT
-========================= */
+======================================================== */
 
 .live-result-box {
   width: 100%;
-  height: 125px;
+
+  height: 126px;
 
   display: flex;
 
@@ -736,6 +737,7 @@ body {
   position: relative;
 }
 
+
 .result-digits {
   display: flex;
 
@@ -743,40 +745,67 @@ body {
 
   justify-content: center;
 
-  line-height: .85;
+  line-height: .86;
 
   transition:
-    opacity .22s ease,
-    transform .22s ease;
+    opacity .20s ease,
+    transform .20s ease;
 }
+
 
 .result-digits.hide {
   opacity: 0;
-  transform: scale(.82);
+
+  transform:
+    scale(.82);
 }
 
+
 .digit {
-  font-size: clamp(
-    105px,
-    30vw,
-    145px
-  );
+  font-size:
+    clamp(
+      108px,
+      31vw,
+      148px
+    );
 
   font-weight: 900;
 
   letter-spacing: -8px;
 }
 
+
 .digit-one {
-  color: #119447;
+  color: #109447;
 }
+
 
 .digit-two {
   color: #ffc400;
 }
 
 
-/* LOADING RING */
+/* NO RESULT */
+
+.no-result {
+  display: none;
+
+  color: #111;
+
+  font-size: 70px;
+
+  font-weight: 900;
+
+  line-height: 1;
+}
+
+
+.no-result.show {
+  display: block;
+}
+
+
+/* BLUE + PURPLE LOADER */
 
 .result-loader {
   display: none;
@@ -790,35 +819,40 @@ body {
 
   border:
     7px solid
-    rgba(63,81,181,.15);
+    rgba(72,73,190,.12);
 
   border-top-color:
     #315fd4;
 
   border-right-color:
-    #7b42d8;
+    #8c42db;
 
   border-bottom-color:
-    #315fd4;
+    #445fe0;
 
   animation:
     resultSpin
-    .75s
+    .68s
     linear
     infinite;
 }
+
 
 .result-loader.show {
   display: block;
 }
 
+
 @keyframes resultSpin {
+
   from {
-    transform: rotate(0deg);
+    transform:
+      rotate(0deg);
   }
 
   to {
-    transform: rotate(360deg);
+    transform:
+      rotate(360deg);
   }
 }
 
@@ -830,15 +864,13 @@ body {
 
   font-weight: 900;
 
-  letter-spacing: .3px;
-
   white-space: nowrap;
 }
 
 
-/* =========================
-   SET / VALUE CARD
-========================= */
+/* ========================================================
+   SET + VALUE
+======================================================== */
 
 .value-card {
   position: relative;
@@ -872,19 +904,25 @@ body {
   padding: 8px;
 }
 
+
 .value-item {
   width: 50%;
 
   text-align: center;
 
-  padding: 2px 8px;
+  padding:
+    2px
+    8px;
 }
+
 
 .value-item:first-child {
   border-right:
-    1px solid
+    1px
+    solid
     #e4e4e4;
 }
+
 
 .value-label {
   color: #0b9347;
@@ -895,6 +933,7 @@ body {
 
   margin-bottom: 5px;
 }
+
 
 .value-number {
   color: #050505;
@@ -907,26 +946,32 @@ body {
 }
 
 
-/* =========================
-   6 ROUNDS
-========================= */
+/* ========================================================
+   6 ROUND CARDS
+======================================================== */
 
 .round-grid {
-  padding: 0 18px;
+  padding:
+    0
+    18px;
 
   display: grid;
 
   grid-template-columns:
     repeat(2, 1fr);
 
-  gap: 8px 10px;
+  gap:
+    8px
+    10px;
 }
+
 
 .round {
   height: 73px;
 
   border:
-    2px solid;
+    2px
+    solid;
 
   border-radius: 15px;
 
@@ -941,17 +986,21 @@ body {
   justify-content: center;
 }
 
+
 .round.green {
   border-color: #16984d;
 }
+
 
 .round.yellow {
   border-color: #e8c327;
 }
 
+
 .round.blue {
   border-color: #176caf;
 }
+
 
 .round-time {
   font-size: 12px;
@@ -961,17 +1010,21 @@ body {
   margin-bottom: 4px;
 }
 
+
 .round.green .round-time {
   color: #109447;
 }
+
 
 .round.yellow .round-time {
   color: #e8b900;
 }
 
+
 .round.blue .round-time {
   color: #0762a9;
 }
+
 
 .round-number {
   color: #0a0a0a;
@@ -984,9 +1037,9 @@ body {
 }
 
 
-/* =========================
-   HISTORY BUTTON
-========================= */
+/* ========================================================
+   HISTORY
+======================================================== */
 
 .bottom {
   padding:
@@ -997,13 +1050,15 @@ body {
   position: relative;
 }
 
+
 .history-btn {
   width: 100%;
 
   height: 48px;
 
   border:
-    2px solid
+    2px
+    solid
     #15994c;
 
   border-radius: 28px;
@@ -1015,9 +1070,8 @@ body {
   font-size: 17px;
 
   font-weight: 900;
-
-  cursor: pointer;
 }
+
 
 .bottom-wave {
   position: absolute;
@@ -1047,11 +1101,11 @@ body {
   }
 
   .hero {
-    height: 190px;
+    height: 188px;
   }
 
   .live-result-box {
-    height: 108px;
+    height: 106px;
   }
 
   .digit {
@@ -1063,7 +1117,7 @@ body {
   }
 
   .round {
-    height: 66px;
+    height: 65px;
   }
 
   .round-number {
@@ -1071,7 +1125,7 @@ body {
   }
 
   .history-btn {
-    height: 44px;
+    height: 43px;
   }
 }
 
@@ -1126,6 +1180,11 @@ body {
       <div
         class="result-digits"
         id="resultDigits"
+        style="${
+          valid2D(data.result)
+            ? ""
+            : "display:none;"
+        }"
       >
 
         <span
@@ -1142,6 +1201,18 @@ body {
           ${escapeHtml(secondDigit)}
         </span>
 
+      </div>
+
+
+      <div
+        class="no-result ${
+          valid2D(data.result)
+            ? ""
+            : "show"
+        }"
+        id="noResult"
+      >
+        --
       </div>
 
 
@@ -1180,7 +1251,11 @@ body {
       class="value-number"
       id="setValue"
     >
-      ${escapeHtml(data.set)}
+      ${
+        data.set !== "--"
+          ? escapeHtml(data.set)
+          : "--"
+      }
     </div>
 
   </div>
@@ -1196,7 +1271,11 @@ body {
       class="value-number"
       id="marketValue"
     >
-      ${escapeHtml(data.value)}
+      ${
+        data.value !== "--"
+          ? escapeHtml(data.value)
+          : "--"
+      }
     </div>
 
   </div>
@@ -1252,86 +1331,220 @@ ${ROUNDS.map(round => `
 
 <script>
 
-let currentLive =
-  ${JSON.stringify(data.live)};
+/* ==========================================================
+   CURRENT FINAL ROUND
 
-let animationRunning = false;
+   IMPORTANT:
+   Compare ROUND TIME too.
+   So if same number repeats on next round,
+   animation still runs.
+========================================================== */
+
+let currentFinalRound =
+  ${JSON.stringify(data.round_time || null)};
+
+let currentFinalResult =
+  ${JSON.stringify(data.result || "--")};
 
 
-/* CLOCK */
+let playingTimer = null;
 
-function updateClock() {
+let animationBusy = false;
 
-  const now =
-    new Date();
+let holdFinal = false;
 
-  const date =
-    new Intl.DateTimeFormat(
-      "en-GB",
-      {
-        timeZone: "Asia/Yangon",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric"
-      }
-    ).format(now);
 
-  const time =
-    new Intl.DateTimeFormat(
-      "en-US",
-      {
-        timeZone: "Asia/Yangon",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true
-      }
-    ).format(now);
+/* ==========================================================
+   RANDOM LIVE DISPLAY
+========================================================== */
 
-  document
-    .getElementById("dateTime")
-    .textContent =
-      date +
-      " | " +
-      time;
+function random2D() {
+
+  return String(
+    Math.floor(
+      Math.random() * 100
+    )
+  ).padStart(2, "0");
 }
 
 
-updateClock();
+function randomSet() {
 
-setInterval(
-  updateClock,
-  1000
-);
+  const value =
+    2000 +
+    Math.random() * 150;
+
+  return value.toFixed(2);
+}
 
 
-/* LARGE RESULT ANIMATION */
+function randomMarketValue() {
 
-function animateLiveResult(nextResult) {
+  const value =
+    68000 +
+    Math.random() * 2000;
 
-  if (animationRunning) {
-    return;
-  }
+  return value.toFixed(2);
+}
+
+
+/* ==========================================================
+   BIG RESULT DISPLAY
+========================================================== */
+
+function showBigNumber(number) {
 
   if (
-    !nextResult ||
-    nextResult === "--" ||
-    nextResult.length !== 2
+    !number ||
+    number.length !== 2
   ) {
     return;
   }
-
-  if (
-    nextResult === currentLive
-  ) {
-    return;
-  }
-
-  animationRunning = true;
 
   const digits =
     document.getElementById(
       "resultDigits"
+    );
+
+  const noResult =
+    document.getElementById(
+      "noResult"
+    );
+
+  noResult.classList.remove(
+    "show"
+  );
+
+  digits.style.display =
+    "flex";
+
+  document
+    .getElementById("digit1")
+    .textContent =
+      number.charAt(0);
+
+  document
+    .getElementById("digit2")
+    .textContent =
+      number.charAt(1);
+}
+
+
+/* ==========================================================
+   START LIVE PLAY
+========================================================== */
+
+function startLivePlay() {
+
+  if (playingTimer) {
+    return;
+  }
+
+  holdFinal =
+    false;
+
+
+  playingTimer =
+    setInterval(
+      function() {
+
+        if (
+          animationBusy ||
+          holdFinal
+        ) {
+          return;
+        }
+
+
+        const randomResult =
+          random2D();
+
+
+        showBigNumber(
+          randomResult
+        );
+
+
+        document
+          .getElementById(
+            "setValue"
+          )
+          .textContent =
+            randomSet();
+
+
+        document
+          .getElementById(
+            "marketValue"
+          )
+          .textContent =
+            randomMarketValue();
+
+      },
+      180
+    );
+}
+
+
+/* ==========================================================
+   STOP PLAY
+========================================================== */
+
+function stopLivePlay() {
+
+  if (playingTimer) {
+
+    clearInterval(
+      playingTimer
+    );
+
+    playingTimer =
+      null;
+  }
+}
+
+
+/* ==========================================================
+   FINAL RESULT ANIMATION
+
+   PLAY -> NUMBER DISAPPEARS
+        -> RING
+        -> ADMIN FINAL RESULT
+========================================================== */
+
+function showFinalResult(
+  result,
+  setValue,
+  marketValue,
+  roundTime
+) {
+
+  if (
+    animationBusy ||
+    !result ||
+    result.length !== 2
+  ) {
+    return;
+  }
+
+
+  animationBusy =
+    true;
+
+  holdFinal =
+    true;
+
+  stopLivePlay();
+
+
+  const digits =
+    document.getElementById(
+      "resultDigits"
+    );
+
+  const noResult =
+    document.getElementById(
+      "noResult"
     );
 
   const loader =
@@ -1340,12 +1553,17 @@ function animateLiveResult(nextResult) {
     );
 
 
-  /* OLD NUMBER DISAPPEARS */
+  noResult.classList.remove(
+    "show"
+  );
+
 
   digits.classList.add(
     "hide"
   );
 
+
+  /* OLD NUMBER DISAPPEARS */
 
   setTimeout(
     function() {
@@ -1358,11 +1576,11 @@ function animateLiveResult(nextResult) {
       );
 
     },
-    220
+    200
   );
 
 
-  /* RING SPINS */
+  /* RING SPINS THEN FINAL APPEARS */
 
   setTimeout(
     function() {
@@ -1371,18 +1589,22 @@ function animateLiveResult(nextResult) {
         "show"
       );
 
+
       document
         .getElementById("digit1")
         .textContent =
-          nextResult.charAt(0);
+          result.charAt(0);
+
 
       document
         .getElementById("digit2")
         .textContent =
-          nextResult.charAt(1);
+          result.charAt(1);
+
 
       digits.style.display =
         "flex";
+
 
       requestAnimationFrame(
         function() {
@@ -1394,116 +1616,251 @@ function animateLiveResult(nextResult) {
         }
       );
 
-      currentLive =
-        nextResult;
 
-      animationRunning =
+      /* FINAL SET */
+
+      document
+        .getElementById(
+          "setValue"
+        )
+        .textContent =
+          setValue || "--";
+
+
+      /* FINAL VALUE */
+
+      document
+        .getElementById(
+          "marketValue"
+        )
+        .textContent =
+          marketValue || "--";
+
+
+      currentFinalResult =
+        result;
+
+
+      currentFinalRound =
+        roundTime;
+
+
+      animationBusy =
         false;
 
+
+      /*
+       * FINAL result ကို ခဏပြထားပြီး
+       * နောက် Round အတွက် Live ကစားပြန်မယ်
+       */
+
+      setTimeout(
+        function() {
+
+          holdFinal =
+            false;
+
+          startLivePlay();
+
+        },
+        3500
+      );
+
     },
-    1200
+    1250
   );
 }
 
 
-/* AUTO UPDATE */
+/* ==========================================================
+   CLOCK
+========================================================== */
 
-async function refreshBrazil2D() {
+function updateClock() {
+
+  const now =
+    new Date();
+
+
+  const date =
+    new Intl.DateTimeFormat(
+      "en-GB",
+      {
+        timeZone:
+          "Asia/Yangon",
+
+        day:
+          "2-digit",
+
+        month:
+          "2-digit",
+
+        year:
+          "numeric"
+      }
+    ).format(now);
+
+
+  const time =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          "Asia/Yangon",
+
+        hour:
+          "2-digit",
+
+        minute:
+          "2-digit",
+
+        second:
+          "2-digit",
+
+        hour12:
+          true
+      }
+    ).format(now);
+
+
+  document
+    .getElementById(
+      "dateTime"
+    )
+    .textContent =
+      date +
+      " | " +
+      time;
+}
+
+
+updateClock();
+
+
+setInterval(
+  updateClock,
+  1000
+);
+
+
+/* ==========================================================
+   LIVE API CHECK
+========================================================== */
+
+async function checkLiveAPI() {
 
   try {
 
     const response =
       await fetch(
-        "/api/today?time=" +
+        "/api/live?t=" +
         Date.now(),
         {
-          cache: "no-store"
+          cache:
+            "no-store"
         }
       );
+
 
     if (!response.ok) {
       return;
     }
 
+
     const data =
       await response.json();
 
 
-    /* SET / VALUE */
+    /* ===============================================
+       UPDATE RELEASED ROUND CARDS
+    =============================================== */
 
-    document
-      .getElementById("setValue")
-      .textContent =
-        data.set || "--";
+    if (data.results) {
 
-    document
-      .getElementById("marketValue")
-      .textContent =
-        data.value || "--";
+      const ids = [
+        "r1100",
+        "r1300",
+        "r1500",
+        "r1700",
+        "r1900",
+        "r2100"
+      ];
 
 
-    /* ROUND RESULTS */
+      for (const id of ids) {
 
-    const ids = [
-      "r1100",
-      "r1300",
-      "r1500",
-      "r1700",
-      "r1900",
-      "r2100"
-    ];
+        const element =
+          document.getElementById(id);
 
-    for (const id of ids) {
 
-      const el =
-        document.getElementById(id);
+        if (element) {
 
-      if (
-        el &&
-        data.results
-      ) {
-        el.textContent =
-          data.results[id] ||
-          "--";
+          element.textContent =
+            data.results[id] ||
+            "--";
+        }
       }
-
     }
 
 
-    /* BIG RESULT */
+    /* ===============================================
+       NEW ROUND RELEASE DETECTION
+
+       Round time compare လုပ်ထားလို့
+       same result number ထပ်လာရင်တောင်
+       animation ကစားမယ်။
+    =============================================== */
 
     if (
-      data.live &&
-      data.live !== "--" &&
-      data.live !== currentLive
+      data.round_time &&
+      data.result &&
+      data.result !== "--" &&
+      data.round_time !== currentFinalRound
     ) {
 
-      animateLiveResult(
-        data.live
+      showFinalResult(
+        data.result,
+        data.set,
+        data.value,
+        data.round_time
       );
-
     }
 
   } catch (error) {
+
     console.log(
-      "Refresh error",
+      "Live API Error:",
       error
     );
   }
-
 }
 
 
-/* CHECK EVERY 5 SECONDS */
+/* ==========================================================
+   START LIVE PLAY
+
+   Page ဖွင့်ထားချိန် Live ကစားမယ်။
+========================================================== */
+
+startLivePlay();
+
+
+/* ==========================================================
+   API CHECK EVERY 1 SECOND
+========================================================== */
+
+checkLiveAPI();
+
 
 setInterval(
-  refreshBrazil2D,
-  5000
+  checkLiveAPI,
+  1000
 );
 
 </script>
 
 </body>
+
 </html>`;
 }
 
@@ -1513,7 +1870,9 @@ setInterval(
 // ============================================================
 
 function adminLoginPage(message = "") {
+
   return `<!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -1528,23 +1887,35 @@ content="width=device-width, initial-scale=1.0">
 <style>
 
 * {
-  box-sizing: border-box;
+  box-sizing:
+    border-box;
 }
 
 body {
   margin: 0;
-  background: #f0f5f2;
-  font-family: Arial, Helvetica, sans-serif;
+
+  background:
+    #f0f5f2;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
 }
 
 .page {
   width: 100%;
+
   max-width: 480px;
+
   min-height: 100vh;
+
   margin: auto;
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   padding: 25px;
@@ -1557,56 +1928,77 @@ body {
 
   border-radius: 25px;
 
-  padding: 32px 24px;
+  padding:
+    32px
+    24px;
 
   box-shadow:
-    0 8px 30px
+    0
+    8px
+    30px
     rgba(0,0,0,.10);
 }
 
 .logo {
   text-align: center;
+
   color: #109447;
+
   font-size: 27px;
+
   font-weight: 900;
+
   margin-bottom: 8px;
 }
 
 .sub {
   text-align: center;
+
   color: #777;
+
   margin-bottom: 28px;
 }
 
 .message {
   text-align: center;
+
   color: #d92727;
+
   font-weight: 800;
+
   margin-bottom: 18px;
 }
 
 label {
   display: block;
+
   font-weight: 800;
+
   margin-bottom: 8px;
 }
 
 input {
   width: 100%;
+
   height: 52px;
 
   border:
-    1px solid #ccc;
+    1px
+    solid
+    #ccc;
 
   border-radius: 12px;
 
-  padding: 0 14px;
+  padding:
+    0
+    14px;
 
   font-size: 17px;
 }
 
 button {
   width: 100%;
+
   height: 54px;
 
   border: 0;
@@ -1642,6 +2034,7 @@ button {
 
 </head>
 
+
 <body>
 
 <div class="page">
@@ -1649,12 +2042,13 @@ button {
 <div class="card">
 
 <div class="logo">
-  BRAZIL 2D 🇧🇷
+BRAZIL 2D 🇧🇷
 </div>
 
 <div class="sub">
-  ADMIN LOGIN
+ADMIN LOGIN
 </div>
+
 
 ${
   message
@@ -1662,40 +2056,48 @@ ${
     : ""
 }
 
+
 <form
-  method="POST"
-  action="/admin/login"
+method="POST"
+action="/admin/login"
 >
+
 
 <label>
-  Password
+Password
 </label>
 
+
 <input
-  type="password"
-  name="password"
-  required
-  autocomplete="current-password"
+type="password"
+name="password"
+required
+autocomplete="current-password"
 >
 
+
 <button type="submit">
-  LOGIN
+LOGIN
 </button>
+
 
 </form>
 
+
 <a
-  href="/"
-  class="home"
+href="/"
+class="home"
 >
-  ← Back to Brazil 2D
+← Back to Brazil 2D
 </a>
+
 
 </div>
 
 </div>
 
 </body>
+
 </html>`;
 }
 
@@ -1704,9 +2106,19 @@ ${
 // ADMIN PAGE
 // ============================================================
 
-async function adminPage(DB) {
+async function adminPage(DB, requestedDate) {
+
   const today =
     getMyanmarDate();
+
+
+  const selectedDate =
+    /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(
+      requestedDate || ""
+    )
+      ? requestedDate
+      : today;
+
 
   const query =
     await DB.prepare(`
@@ -1715,28 +2127,38 @@ async function adminPage(DB) {
         result,
         set_value,
         market_value
+
       FROM results
+
       WHERE result_date = ?
     `)
-    .bind(today)
+    .bind(selectedDate)
     .all();
+
 
   const rows =
     query.results || [];
 
+
   const map = {};
 
+
   let setValue = "";
+
   let marketValue = "";
 
+
   for (const row of rows) {
+
     map[row.round_time] =
       row.result || "";
+
 
     if (row.set_value) {
       setValue =
         row.set_value;
     }
+
 
     if (row.market_value) {
       marketValue =
@@ -1744,7 +2166,9 @@ async function adminPage(DB) {
     }
   }
 
+
   return `<!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -1756,10 +2180,12 @@ content="width=device-width, initial-scale=1.0">
 
 <title>Brazil 2D Admin</title>
 
+
 <style>
 
 * {
-  box-sizing: border-box;
+  box-sizing:
+    border-box;
 }
 
 body {
@@ -1770,23 +2196,34 @@ body {
     Helvetica,
     sans-serif;
 
-  background: #f3f6f4;
+  background:
+    #f3f6f4;
 }
 
 .admin {
   width: 100%;
+
   max-width: 500px;
+
   margin: auto;
+
   min-height: 100vh;
+
   background: #fff;
 }
 
 .header {
-  background: #109447;
+  background:
+    #109447;
+
   color: #fff;
+
   padding: 22px;
+
   text-align: center;
+
   font-size: 24px;
+
   font-weight: 900;
 }
 
@@ -1817,7 +2254,9 @@ input {
     13px;
 
   border:
-    1px solid #ccc;
+    1px
+    solid
+    #ccc;
 
   border-radius: 10px;
 
@@ -1836,7 +2275,9 @@ input {
 
 .card {
   border:
-    1px solid #ddd;
+    1px
+    solid
+    #ddd;
 
   border-radius: 14px;
 
@@ -1845,11 +2286,13 @@ input {
 
 .card label {
   margin-top: 0;
+
   color: #109447;
 }
 
 .save {
   width: 100%;
+
   height: 54px;
 
   margin-top: 24px;
@@ -1869,26 +2312,37 @@ input {
 
 .links {
   display: flex;
+
   gap: 10px;
+
   margin-top: 20px;
 }
 
 .links a {
   flex: 1;
+
   text-align: center;
-  padding: 14px 5px;
+
+  padding:
+    14px
+    5px;
+
   border-radius: 12px;
+
   text-decoration: none;
+
   font-weight: 800;
 }
 
 .home {
   color: #0762a9;
+
   background: #edf6fc;
 }
 
 .logout {
   color: #c62828;
+
   background: #fff0f0;
 }
 
@@ -1896,147 +2350,205 @@ input {
 
 </head>
 
+
 <body>
+
 
 <div class="admin">
 
+
 <div class="header">
-  BRAZIL 2D ADMIN 🇧🇷
+
+BRAZIL 2D ADMIN 🇧🇷
+
 </div>
+
 
 <div class="content">
 
+
 <form
-  method="POST"
-  action="/admin/save"
+method="POST"
+action="/admin/save"
 >
 
+
 <label>
-  Result Date
+Result Date
 </label>
 
+
 <input
-  type="date"
-  name="result_date"
-  value="${today}"
-  required
+type="date"
+name="result_date"
+id="resultDate"
+value="${escapeHtml(selectedDate)}"
+required
+onchange="loadSelectedDate()"
 >
 
 
 <label>
-  SET VALUE
+SET VALUE
 </label>
 
+
 <input
-  type="text"
-  name="set_value"
-  value="${escapeHtml(setValue)}"
-  placeholder="Example: 2,081.50"
+type="text"
+name="set_value"
+value="${escapeHtml(setValue)}"
+placeholder="Example: 2,081.50"
 >
 
 
 <label>
-  MARKET VALUE
+MARKET VALUE
 </label>
 
+
 <input
-  type="text"
-  name="market_value"
-  value="${escapeHtml(marketValue)}"
-  placeholder="Example: 69,135.01"
+type="text"
+name="market_value"
+value="${escapeHtml(marketValue)}"
+placeholder="Example: 69,135.01"
 >
 
 
 <label>
-  2D RESULTS
+2D RESULTS
 </label>
 
 
 <div class="grid">
 
+
 ${ROUNDS.map(round => `
 
 <div class="card">
 
+
 <label>
-  ${round.time}
+${round.time}
 </label>
 
+
 <input
-  type="text"
-  name="${round.field}"
-  value="${
-    valid2D(map[round.time])
-      ? escapeHtml(map[round.time])
-      : ""
-  }"
-  maxlength="2"
-  inputmode="numeric"
-  placeholder="--"
+type="text"
+name="${round.field}"
+value="${
+  valid2D(map[round.time])
+    ? escapeHtml(map[round.time])
+    : ""
+}"
+maxlength="2"
+inputmode="numeric"
+placeholder="--"
 >
+
 
 </div>
 
 `).join("")}
 
+
 </div>
 
 
 <button
-  class="save"
-  type="submit"
+class="save"
+type="submit"
 >
-  SAVE RESULTS
+
+SAVE RESULTS
+
 </button>
+
 
 </form>
 
 
 <div class="links">
 
-<a
-  class="home"
-  href="/"
->
-  Main Page
-</a>
 
 <a
-  class="logout"
-  href="/admin/logout"
+class="home"
+href="/"
 >
-  Logout
+
+Main Page
+
 </a>
 
+
+<a
+class="logout"
+href="/admin/logout"
+>
+
+Logout
+
+</a>
+
+
 </div>
+
 
 </div>
 
 </div>
+
+
+<script>
+
+function loadSelectedDate() {
+
+  const date =
+    document
+      .getElementById(
+        "resultDate"
+      )
+      .value;
+
+
+  if (date) {
+
+    window.location.href =
+      "/admin?date=" +
+      encodeURIComponent(date);
+  }
+}
+
+</script>
+
 
 </body>
+
 </html>`;
 }
 
 
 // ============================================================
-// SAVE RESULTS
+// SAVE ADMIN RESULTS
 // ============================================================
 
 async function saveResults(request, env) {
+
   const form =
     await request.formData();
+
 
   const resultDate =
     String(
       form.get("result_date") || ""
     ).trim();
 
+
   if (
     !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(
       resultDate
     )
   ) {
+
     return new Response(
       "Invalid date",
       {
@@ -2045,10 +2557,12 @@ async function saveResults(request, env) {
     );
   }
 
+
   const setValue =
     String(
       form.get("set_value") || ""
     ).trim();
+
 
   const marketValue =
     String(
@@ -2057,6 +2571,7 @@ async function saveResults(request, env) {
 
 
   for (const round of ROUNDS) {
+
     const newResult =
       String(
         form.get(round.field) || ""
@@ -2067,6 +2582,7 @@ async function saveResults(request, env) {
       newResult &&
       !valid2D(newResult)
     ) {
+
       return new Response(
         round.time +
         " result must be exactly 2 digits.",
@@ -2083,10 +2599,13 @@ async function saveResults(request, env) {
           result,
           set_value,
           market_value
+
         FROM results
+
         WHERE
           result_date = ?
           AND round_time = ?
+
         LIMIT 1
       `)
       .bind(
@@ -2101,7 +2620,9 @@ async function saveResults(request, env) {
       (
         existing &&
         valid2D(existing.result)
+
           ? existing.result
+
           : "--"
       );
 
@@ -2149,25 +2670,34 @@ async function saveResults(request, env) {
       )
 
       DO UPDATE SET
-        result = excluded.result,
-        set_value = excluded.set_value,
-        market_value = excluded.market_value,
-        updated_at = CURRENT_TIMESTAMP
+
+        result =
+          excluded.result,
+
+        set_value =
+          excluded.set_value,
+
+        market_value =
+          excluded.market_value,
+
+        updated_at =
+          CURRENT_TIMESTAMP
     `)
-    .bind(
-      resultDate,
-      round.time,
-      finalResult,
-      finalSet,
-      finalMarket
-    )
-    .run();
+      .bind(
+        resultDate,
+        round.time,
+        finalResult,
+        finalSet,
+        finalMarket
+      )
+      .run();
   }
 
 
   return Response.redirect(
     new URL(
-      "/admin",
+      "/admin?date=" +
+      encodeURIComponent(resultDate),
       request.url
     ).toString(),
     303
@@ -2176,11 +2706,12 @@ async function saveResults(request, env) {
 
 
 // ============================================================
-// HISTORY PAGE
-// DATE + 6 RESULT ONLY
+// HISTORY
+// DATE + 6 RESULTS ONLY
 // ============================================================
 
 async function historyPage(DB) {
+
   const query =
     await DB.prepare(`
       SELECT
@@ -2191,22 +2722,39 @@ async function historyPage(DB) {
       FROM results
 
       ORDER BY
+
         result_date DESC,
 
         CASE round_time
-          WHEN '11:00 AM' THEN 1
-          WHEN '01:00 PM' THEN 2
-          WHEN '03:00 PM' THEN 3
-          WHEN '05:00 PM' THEN 4
-          WHEN '07:00 PM' THEN 5
-          WHEN '09:00 PM' THEN 6
+
+          WHEN '11:00 AM'
+            THEN 1
+
+          WHEN '01:00 PM'
+            THEN 2
+
+          WHEN '03:00 PM'
+            THEN 3
+
+          WHEN '05:00 PM'
+            THEN 4
+
+          WHEN '07:00 PM'
+            THEN 5
+
+          WHEN '09:00 PM'
+            THEN 6
+
           ELSE 99
+
         END
     `)
     .all();
 
+
   const rows =
     query.results || [];
+
 
   const grouped = {};
 
@@ -2214,10 +2762,15 @@ async function historyPage(DB) {
   for (const row of rows) {
 
     if (!grouped[row.result_date]) {
-      grouped[row.result_date] = {};
+
+      grouped[
+        row.result_date
+      ] = {};
     }
 
+
     if (valid2D(row.result)) {
+
       grouped[
         row.result_date
       ][
@@ -2225,7 +2778,6 @@ async function historyPage(DB) {
       ] =
         row.result;
     }
-
   }
 
 
@@ -2236,35 +2788,45 @@ async function historyPage(DB) {
         const results =
           grouped[date];
 
+
         return `
 
 <div class="day">
 
-  <div class="date">
-    ${escapeHtml(date)}
-  </div>
 
-  <div class="rounds">
+<div class="date">
+${escapeHtml(date)}
+</div>
 
-    ${ROUNDS.map(round => `
 
-      <div class="round ${round.color}">
+<div class="rounds">
 
-        <div class="time">
-          ${round.time}
-        </div>
 
-        <div class="number">
-          ${escapeHtml(
-            results[round.time] || "--"
-          )}
-        </div>
+${ROUNDS.map(round => `
 
-      </div>
+<div class="round ${round.color}">
 
-    `).join("")}
 
-  </div>
+<div class="time">
+${round.time}
+</div>
+
+
+<div class="number">
+${escapeHtml(
+  results[round.time] ||
+  "--"
+)}
+</div>
+
+
+</div>
+
+`).join("")}
+
+
+</div>
+
 
 </div>
 
@@ -2275,6 +2837,7 @@ async function historyPage(DB) {
 
 
   return `<!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -2286,10 +2849,12 @@ content="width=device-width, initial-scale=1.0">
 
 <title>Brazil 2D History</title>
 
+
 <style>
 
 * {
-  box-sizing: border-box;
+  box-sizing:
+    border-box;
 }
 
 body {
@@ -2300,21 +2865,27 @@ body {
     Helvetica,
     sans-serif;
 
-  background: #f2f6f3;
+  background:
+    #f2f6f3;
 
   color: #111;
 }
 
 .page {
   width: 100%;
+
   max-width: 480px;
+
   min-height: 100vh;
+
   margin: auto;
+
   background: #fff;
 }
 
 .header {
-  background: #109447;
+  background:
+    #109447;
 
   color: #fff;
 
@@ -2331,12 +2902,15 @@ body {
 
 .back {
   font-size: 34px;
+
   margin-right: 15px;
+
   cursor: pointer;
 }
 
 .title {
   font-size: 20px;
+
   font-weight: 900;
 }
 
@@ -2361,7 +2935,8 @@ body {
 }
 
 .date {
-  color: #0864ac;
+  color:
+    #0864ac;
 
   font-size: 19px;
 
@@ -2395,86 +2970,113 @@ body {
 }
 
 .round.green {
-  border-color: #109447;
+  border-color:
+    #109447;
 }
 
 .round.yellow {
-  border-color: #e8c327;
+  border-color:
+    #e8c327;
 }
 
 .round.blue {
-  border-color: #176caf;
+  border-color:
+    #176caf;
 }
 
 .time {
   font-size: 12px;
+
   font-weight: 800;
+
   margin-bottom: 5px;
 }
 
 .round.green .time {
-  color: #109447;
+  color:
+    #109447;
 }
 
 .round.yellow .time {
-  color: #e8b900;
+  color:
+    #e8b900;
 }
 
 .round.blue .time {
-  color: #0762a9;
+  color:
+    #0762a9;
 }
 
 .number {
   font-size: 27px;
+
   font-weight: 900;
+
   color: #111;
 }
 
 .empty {
   text-align: center;
+
   color: #999;
-  padding: 80px 20px;
+
+  padding:
+    80px
+    20px;
 }
 
 </style>
 
 </head>
 
+
 <body>
+
 
 <div class="page">
 
-  <div class="header">
 
-    <div
-      class="back"
-      onclick="window.location.href='/'"
-    >
-      ‹
-    </div>
-
-    <div class="title">
-      BRAZIL 2D HISTORY 🇧🇷
-    </div>
-
-  </div>
+<div class="header">
 
 
-  <div class="content">
+<div
+class="back"
+onclick="window.location.href='/'"
+>
+‹
+</div>
 
-    ${
-      historyHtml ||
-      `
-      <div class="empty">
-        No history data yet.
-      </div>
-      `
-    }
 
-  </div>
+<div class="title">
+
+BRAZIL 2D HISTORY 🇧🇷
 
 </div>
 
+
+</div>
+
+
+<div class="content">
+
+
+${
+  historyHtml ||
+  `
+  <div class="empty">
+    No history data yet.
+  </div>
+  `
+}
+
+
+</div>
+
+
+</div>
+
+
 </body>
+
 </html>`;
-            }
+}
