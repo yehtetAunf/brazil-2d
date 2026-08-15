@@ -3,17 +3,37 @@ export default {
     const url = new URL(request.url);
 
     try {
+      // =========================
       // MAIN PAGE
+      // =========================
       if (url.pathname === "/" && request.method === "GET") {
         return html(await mainPage(env.DB));
       }
 
+      // =========================
+      // LIVE API
+      // =========================
+      if (url.pathname === "/api/today" && request.method === "GET") {
+        const data = await getTodayData(env.DB);
+
+        return new Response(JSON.stringify(data), {
+          headers: {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Cache-Control": "no-store, no-cache, must-revalidate"
+          }
+        });
+      }
+
+      // =========================
       // HISTORY
+      // =========================
       if (url.pathname === "/history" && request.method === "GET") {
         return html(await historyPage(env.DB));
       }
 
+      // =========================
       // ADMIN
+      // =========================
       if (url.pathname === "/admin" && request.method === "GET") {
         const loggedIn = await isAdmin(request, env);
 
@@ -24,12 +44,16 @@ export default {
         return html(await adminPage(env.DB));
       }
 
+      // =========================
       // ADMIN LOGIN
+      // =========================
       if (url.pathname === "/admin/login" && request.method === "POST") {
         return await adminLogin(request, env);
       }
 
+      // =========================
       // ADMIN LOGOUT
+      // =========================
       if (url.pathname === "/admin/logout") {
         return new Response(null, {
           status: 302,
@@ -41,7 +65,9 @@ export default {
         });
       }
 
+      // =========================
       // SAVE RESULTS
+      // =========================
       if (url.pathname === "/admin/save" && request.method === "POST") {
         const loggedIn = await isAdmin(request, env);
 
@@ -83,37 +109,43 @@ const ROUNDS = [
     time: "11:00 AM",
     minutes: 11 * 60,
     color: "green",
-    field: "r1100"
+    field: "r1100",
+    id: "r1100"
   },
   {
     time: "01:00 PM",
     minutes: 13 * 60,
     color: "yellow",
-    field: "r1300"
+    field: "r1300",
+    id: "r1300"
   },
   {
     time: "03:00 PM",
     minutes: 15 * 60,
     color: "blue",
-    field: "r1500"
+    field: "r1500",
+    id: "r1500"
   },
   {
     time: "05:00 PM",
     minutes: 17 * 60,
     color: "green",
-    field: "r1700"
+    field: "r1700",
+    id: "r1700"
   },
   {
     time: "07:00 PM",
     minutes: 19 * 60,
     color: "yellow",
-    field: "r1900"
+    field: "r1900",
+    id: "r1900"
   },
   {
     time: "09:00 PM",
     minutes: 21 * 60,
     color: "blue",
-    field: "r2100"
+    field: "r2100",
+    id: "r2100"
   }
 ];
 
@@ -144,8 +176,13 @@ function escapeHtml(value = "") {
 }
 
 
+function pad2(number) {
+  return String(number).padStart(2, "0");
+}
+
+
 function getYangonParts() {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Yangon",
     year: "numeric",
     month: "2-digit",
@@ -175,11 +212,6 @@ function getYangonParts() {
 }
 
 
-function pad2(number) {
-  return String(number).padStart(2, "0");
-}
-
-
 function getMyanmarDate() {
   const p = getYangonParts();
 
@@ -195,12 +227,18 @@ function getMyanmarDate() {
 
 function getCurrentMinutes() {
   const p = getYangonParts();
-  return p.hour * 60 + p.minute;
+
+  return (
+    p.hour * 60 +
+    p.minute
+  );
 }
 
 
 function valid2D(value) {
-  return /^[0-9]{2}$/.test(String(value || ""));
+  return /^[0-9]{2}$/.test(
+    String(value || "")
+  );
 }
 
 
@@ -249,11 +287,15 @@ function arrayBufferToBase64Url(buffer) {
 
 
 function getCookie(request, name) {
-  const cookie = request.headers.get("Cookie") || "";
-  const pieces = cookie.split(";");
+  const cookie =
+    request.headers.get("Cookie") || "";
+
+  const pieces =
+    cookie.split(";");
 
   for (const piece of pieces) {
-    const [key, ...rest] = piece.trim().split("=");
+    const [key, ...rest] =
+      piece.trim().split("=");
 
     if (key === name) {
       return rest.join("=");
@@ -269,12 +311,20 @@ async function createAdminToken(secret) {
     Date.now() +
     12 * 60 * 60 * 1000;
 
-  const data = String(expires);
+  const data =
+    String(expires);
 
   const signature =
-    await createSignature(data, secret);
+    await createSignature(
+      data,
+      secret
+    );
 
-  return data + "." + signature;
+  return (
+    data +
+    "." +
+    signature
+  );
 }
 
 
@@ -284,22 +334,32 @@ async function isAdmin(request, env) {
   }
 
   const token =
-    getCookie(request, "brazil_admin");
+    getCookie(
+      request,
+      "brazil_admin"
+    );
 
   if (!token) {
     return false;
   }
 
-  const pieces = token.split(".");
+  const pieces =
+    token.split(".");
 
   if (pieces.length !== 2) {
     return false;
   }
 
-  const expires = pieces[0];
-  const signature = pieces[1];
+  const expires =
+    pieces[0];
 
-  if (Number(expires) < Date.now()) {
+  const signature =
+    pieces[1];
+
+  if (
+    Number(expires) <
+    Date.now()
+  ) {
     return false;
   }
 
@@ -309,7 +369,10 @@ async function isAdmin(request, env) {
       env.ADMIN_PASSWORD
     );
 
-  return signature === expected;
+  return (
+    signature ===
+    expected
+  );
 }
 
 
@@ -327,7 +390,9 @@ async function adminLogin(request, env) {
     password !== env.ADMIN_PASSWORD
   ) {
     return html(
-      adminLoginPage("Wrong password."),
+      adminLoginPage(
+        "Wrong password."
+      ),
       401
     );
   }
@@ -356,11 +421,12 @@ async function adminLogin(request, env) {
 
 
 // ============================================================
-// MAIN PAGE
+// GET TODAY DATA
 // ============================================================
 
-async function mainPage(DB) {
-  const today = getMyanmarDate();
+async function getTodayData(DB) {
+  const today =
+    getMyanmarDate();
 
   const currentMinutes =
     getCurrentMinutes();
@@ -368,7 +434,6 @@ async function mainPage(DB) {
   const query =
     await DB.prepare(`
       SELECT
-        result_date,
         round_time,
         result,
         set_value,
@@ -388,53 +453,78 @@ async function mainPage(DB) {
   let marketValue = "--";
 
   for (const row of rows) {
-    databaseMap[row.round_time] = row;
+    databaseMap[row.round_time] =
+      row;
 
     if (row.set_value) {
-      setValue = row.set_value;
+      setValue =
+        row.set_value;
     }
 
     if (row.market_value) {
-      marketValue = row.market_value;
+      marketValue =
+        row.market_value;
     }
   }
 
-  const displayResults = {};
+
+  const results = {};
 
   let liveResult = "--";
+
 
   for (const round of ROUNDS) {
     const row =
       databaseMap[round.time];
 
     const reached =
-      currentMinutes >= round.minutes;
+      currentMinutes >=
+      round.minutes;
 
     if (
       reached &&
       row &&
       valid2D(row.result)
     ) {
-      displayResults[round.time] =
+      results[round.id] =
         row.result;
 
       liveResult =
         row.result;
     } else {
-      displayResults[round.time] =
+      results[round.id] =
         "--";
     }
   }
 
+
+  return {
+    date: today,
+    set: setValue,
+    value: marketValue,
+    live: liveResult,
+    results
+  };
+}
+
+
+// ============================================================
+// MAIN PAGE
+// ============================================================
+
+async function mainPage(DB) {
+  const data =
+    await getTodayData(DB);
+
   let firstDigit = "-";
   let secondDigit = "-";
 
-  if (valid2D(liveResult)) {
+  if (valid2D(data.live)) {
     firstDigit =
-      liveResult.charAt(0);
+      data.live.charAt(0);
 
     secondDigit =
-      liveResult.charAt(1);
+      data.live.charAt(1);
   }
 
   return `<!DOCTYPE html>
@@ -445,7 +535,7 @@ async function mainPage(DB) {
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 
 <title>Brazil 2D</title>
 
@@ -461,7 +551,7 @@ html,
 body {
   width: 100%;
   min-height: 100%;
-  background: #eef3f0;
+  background: #ffffff;
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -472,7 +562,7 @@ body {
 .app {
   width: 100%;
   max-width: 480px;
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   background: #fff;
   position: relative;
@@ -480,18 +570,23 @@ body {
 }
 
 
-/* LIVE HEADER */
+/* =========================
+   LIVE HEADER
+========================= */
 
 .live-header {
-  padding: 22px 24px;
+  height: 58px;
+  padding: 8px 18px;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   background: #fff;
 }
 
 .brand {
-  font-size: 25px;
+  font-size: 22px;
   font-weight: 900;
   font-style: italic;
   white-space: nowrap;
@@ -512,26 +607,40 @@ body {
 .live-pill {
   background: #e2f5e9;
   color: #078f40;
-  padding: 12px 15px;
-  border-radius: 28px;
-  font-size: 13px;
+
+  padding: 9px 12px;
+
+  border-radius: 26px;
+
+  font-size: 11px;
   font-weight: 900;
+
   white-space: nowrap;
 }
 
 .live-dot {
   display: inline-block;
-  width: 12px;
-  height: 12px;
+
+  width: 10px;
+  height: 10px;
+
   background: #08a34b;
+
   border-radius: 50%;
-  margin-right: 7px;
+
+  margin-right: 6px;
+
   vertical-align: -1px;
-  animation: pulse 1.3s infinite;
+
+  animation:
+    pulse
+    1.3s
+    infinite;
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
 
@@ -541,12 +650,17 @@ body {
 }
 
 
-/* HERO */
+/* =========================
+   HERO
+========================= */
 
 .hero {
   position: relative;
+
+  height: 215px;
+
   text-align: center;
-  padding: 25px 20px 70px;
+
   overflow: hidden;
 
   background:
@@ -560,51 +674,97 @@ body {
       rgba(16,148,71,.08),
       transparent 22%
     ),
-    linear-gradient(#fff, #fff);
+    #fff;
 }
 
 .hero::after {
   content: "";
+
   position: absolute;
+
   left: -8%;
   right: -8%;
   bottom: 0;
-  height: 82px;
+
+  height: 56px;
 
   background:
     linear-gradient(
       168deg,
-      transparent 0 34%,
-      rgba(23,156,79,.50) 35% 52%,
-      rgba(247,205,26,.80) 53% 64%,
-      rgba(16,101,179,.55) 65% 100%
+      transparent 0 30%,
+      rgba(23,156,79,.50) 31% 52%,
+      rgba(247,205,26,.80) 53% 65%,
+      rgba(16,101,179,.55) 66% 100%
     );
 
   z-index: 0;
 }
 
 .hero-content {
+  height: 100%;
+
   position: relative;
+
   z-index: 2;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding-bottom: 38px;
 }
 
-.big-result {
+
+/* =========================
+   BIG LIVE RESULT
+========================= */
+
+.live-result-box {
+  width: 100%;
+  height: 125px;
+
   display: flex;
+
   align-items: center;
+
   justify-content: center;
-  line-height: .9;
-  margin: 5px 0 30px;
+
+  position: relative;
+}
+
+.result-digits {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  line-height: .85;
+
+  transition:
+    opacity .22s ease,
+    transform .22s ease;
+}
+
+.result-digits.hide {
+  opacity: 0;
+  transform: scale(.82);
 }
 
 .digit {
   font-size: clamp(
-    128px,
-    37vw,
-    176px
+    105px,
+    30vw,
+    145px
   );
 
   font-weight: 900;
-  letter-spacing: -10px;
+
+  letter-spacing: -8px;
 }
 
 .digit-one {
@@ -615,93 +775,169 @@ body {
   color: #ffc400;
 }
 
+
+/* LOADING RING */
+
+.result-loader {
+  display: none;
+
+  position: absolute;
+
+  width: 72px;
+  height: 72px;
+
+  border-radius: 50%;
+
+  border:
+    7px solid
+    rgba(63,81,181,.15);
+
+  border-top-color:
+    #315fd4;
+
+  border-right-color:
+    #7b42d8;
+
+  border-bottom-color:
+    #315fd4;
+
+  animation:
+    resultSpin
+    .75s
+    linear
+    infinite;
+}
+
+.result-loader.show {
+  display: block;
+}
+
+@keyframes resultSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
 .date-time {
   color: #075ea8;
-  font-size: 19px;
+
+  font-size: 15px;
+
   font-weight: 900;
-  letter-spacing: .5px;
-}
 
+  letter-spacing: .3px;
 
-/* VALUE CARD */
-
-.value-card {
-  position: relative;
-  z-index: 5;
-
-  width:
-    calc(100% - 46px);
-
-  margin:
-    -36px
-    auto
-    24px;
-
-  background: #fff;
-
-  border-radius: 24px;
-
-  box-shadow:
-    0 5px 18px
-    rgba(0,0,0,.13);
-
-  display: flex;
-
-  padding: 25px 8px;
-}
-
-.value-item {
-  width: 50%;
-  text-align: center;
-  padding: 3px 10px;
-}
-
-.value-item:first-child {
-  border-right:
-    1px solid #e4e4e4;
-}
-
-.value-label {
-  color: #0b9347;
-  font-size: 14px;
-  font-weight: 900;
-  margin-bottom: 10px;
-}
-
-.value-number {
-  color: #050505;
-  font-size: 25px;
-  font-weight: 900;
   white-space: nowrap;
 }
 
 
-/* ROUNDS */
+/* =========================
+   SET / VALUE CARD
+========================= */
+
+.value-card {
+  position: relative;
+
+  z-index: 5;
+
+  width:
+    calc(100% - 36px);
+
+  height: 76px;
+
+  margin:
+    -28px
+    auto
+    12px;
+
+  background: #fff;
+
+  border-radius: 20px;
+
+  box-shadow:
+    0
+    5px
+    16px
+    rgba(0,0,0,.12);
+
+  display: flex;
+
+  align-items: center;
+
+  padding: 8px;
+}
+
+.value-item {
+  width: 50%;
+
+  text-align: center;
+
+  padding: 2px 8px;
+}
+
+.value-item:first-child {
+  border-right:
+    1px solid
+    #e4e4e4;
+}
+
+.value-label {
+  color: #0b9347;
+
+  font-size: 12px;
+
+  font-weight: 900;
+
+  margin-bottom: 5px;
+}
+
+.value-number {
+  color: #050505;
+
+  font-size: 21px;
+
+  font-weight: 900;
+
+  white-space: nowrap;
+}
+
+
+/* =========================
+   6 ROUNDS
+========================= */
 
 .round-grid {
-  padding: 0 22px;
+  padding: 0 18px;
 
   display: grid;
 
   grid-template-columns:
     repeat(2, 1fr);
 
-  gap: 13px;
+  gap: 8px 10px;
 }
 
 .round {
-  height: 112px;
+  height: 73px;
 
   border:
     2px solid;
 
-  border-radius: 19px;
+  border-radius: 15px;
 
   background: #fff;
 
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   justify-content: center;
 }
 
@@ -718,9 +954,11 @@ body {
 }
 
 .round-time {
-  font-size: 15px;
+  font-size: 12px;
+
   font-weight: 900;
-  margin-bottom: 8px;
+
+  margin-bottom: 4px;
 }
 
 .round.green .round-time {
@@ -737,38 +975,44 @@ body {
 
 .round-number {
   color: #0a0a0a;
-  font-size: 39px;
+
+  font-size: 29px;
+
   line-height: 1;
+
   font-weight: 900;
 }
 
 
-/* HISTORY BUTTON */
+/* =========================
+   HISTORY BUTTON
+========================= */
 
 .bottom {
   padding:
-    26px
-    22px
-    70px;
+    11px
+    18px
+    38px;
 
   position: relative;
 }
 
 .history-btn {
   width: 100%;
-  height: 72px;
+
+  height: 48px;
 
   border:
     2px solid
     #15994c;
 
-  border-radius: 38px;
+  border-radius: 28px;
 
   background: #fff;
 
   color: #129448;
 
-  font-size: 20px;
+  font-size: 17px;
 
   font-weight: 900;
 
@@ -782,7 +1026,7 @@ body {
   right: -5%;
   bottom: 0;
 
-  height: 48px;
+  height: 27px;
 
   background:
     linear-gradient(
@@ -794,29 +1038,47 @@ body {
 }
 
 
-@media (max-width: 380px) {
+/* SMALL PHONE */
 
-  .brand {
-    font-size: 21px;
+@media (max-height: 700px) {
+
+  .live-header {
+    height: 52px;
   }
 
-  .live-pill {
-    font-size: 11px;
-    padding: 10px 12px;
+  .hero {
+    height: 190px;
   }
 
-  .value-number {
-    font-size: 21px;
+  .live-result-box {
+    height: 108px;
   }
 
-  .round-grid {
-    padding: 0 15px;
+  .digit {
+    font-size: 102px;
+  }
+
+  .value-card {
+    height: 68px;
+  }
+
+  .round {
+    height: 66px;
+  }
+
+  .round-number {
+    font-size: 26px;
+  }
+
+  .history-btn {
+    height: 44px;
   }
 }
 
 </style>
 
 </head>
+
 
 <body>
 
@@ -857,15 +1119,37 @@ body {
 
   <div class="hero-content">
 
-    <div class="big-result">
 
-      <span class="digit digit-one">
-        ${escapeHtml(firstDigit)}
-      </span>
+    <div class="live-result-box">
 
-      <span class="digit digit-two">
-        ${escapeHtml(secondDigit)}
-      </span>
+
+      <div
+        class="result-digits"
+        id="resultDigits"
+      >
+
+        <span
+          class="digit digit-one"
+          id="digit1"
+        >
+          ${escapeHtml(firstDigit)}
+        </span>
+
+        <span
+          class="digit digit-two"
+          id="digit2"
+        >
+          ${escapeHtml(secondDigit)}
+        </span>
+
+      </div>
+
+
+      <div
+        class="result-loader"
+        id="resultLoader"
+      ></div>
+
 
     </div>
 
@@ -877,6 +1161,7 @@ body {
       --/--/---- | --:--:-- --
     </div>
 
+
   </div>
 
 </section>
@@ -884,14 +1169,18 @@ body {
 
 <section class="value-card">
 
+
   <div class="value-item">
 
     <div class="value-label">
-      SET VALUE
+      SET
     </div>
 
-    <div class="value-number">
-      ${escapeHtml(setValue)}
+    <div
+      class="value-number"
+      id="setValue"
+    >
+      ${escapeHtml(data.set)}
     </div>
 
   </div>
@@ -900,19 +1189,24 @@ body {
   <div class="value-item">
 
     <div class="value-label">
-      MARKET VALUE
+      VALUE
     </div>
 
-    <div class="value-number">
-      ${escapeHtml(marketValue)}
+    <div
+      class="value-number"
+      id="marketValue"
+    >
+      ${escapeHtml(data.value)}
     </div>
 
   </div>
+
 
 </section>
 
 
 <section class="round-grid">
+
 
 ${ROUNDS.map(round => `
 
@@ -922,15 +1216,19 @@ ${ROUNDS.map(round => `
     ${round.time}
   </div>
 
-  <div class="round-number">
+  <div
+    class="round-number"
+    id="${round.id}"
+  >
     ${escapeHtml(
-      displayResults[round.time] || "--"
+      data.results[round.id] || "--"
     )}
   </div>
 
 </div>
 
 `).join("")}
+
 
 </section>
 
@@ -954,9 +1252,18 @@ ${ROUNDS.map(round => `
 
 <script>
 
+let currentLive =
+  ${JSON.stringify(data.live)};
+
+let animationRunning = false;
+
+
+/* CLOCK */
+
 function updateClock() {
 
-  const now = new Date();
+  const now =
+    new Date();
 
   const date =
     new Intl.DateTimeFormat(
@@ -984,14 +1291,214 @@ function updateClock() {
   document
     .getElementById("dateTime")
     .textContent =
-      date + " | " + time;
+      date +
+      " | " +
+      time;
 }
+
 
 updateClock();
 
 setInterval(
   updateClock,
   1000
+);
+
+
+/* LARGE RESULT ANIMATION */
+
+function animateLiveResult(nextResult) {
+
+  if (animationRunning) {
+    return;
+  }
+
+  if (
+    !nextResult ||
+    nextResult === "--" ||
+    nextResult.length !== 2
+  ) {
+    return;
+  }
+
+  if (
+    nextResult === currentLive
+  ) {
+    return;
+  }
+
+  animationRunning = true;
+
+  const digits =
+    document.getElementById(
+      "resultDigits"
+    );
+
+  const loader =
+    document.getElementById(
+      "resultLoader"
+    );
+
+
+  /* OLD NUMBER DISAPPEARS */
+
+  digits.classList.add(
+    "hide"
+  );
+
+
+  setTimeout(
+    function() {
+
+      digits.style.display =
+        "none";
+
+      loader.classList.add(
+        "show"
+      );
+
+    },
+    220
+  );
+
+
+  /* RING SPINS */
+
+  setTimeout(
+    function() {
+
+      loader.classList.remove(
+        "show"
+      );
+
+      document
+        .getElementById("digit1")
+        .textContent =
+          nextResult.charAt(0);
+
+      document
+        .getElementById("digit2")
+        .textContent =
+          nextResult.charAt(1);
+
+      digits.style.display =
+        "flex";
+
+      requestAnimationFrame(
+        function() {
+
+          digits.classList.remove(
+            "hide"
+          );
+
+        }
+      );
+
+      currentLive =
+        nextResult;
+
+      animationRunning =
+        false;
+
+    },
+    1200
+  );
+}
+
+
+/* AUTO UPDATE */
+
+async function refreshBrazil2D() {
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/today?time=" +
+        Date.now(),
+        {
+          cache: "no-store"
+        }
+      );
+
+    if (!response.ok) {
+      return;
+    }
+
+    const data =
+      await response.json();
+
+
+    /* SET / VALUE */
+
+    document
+      .getElementById("setValue")
+      .textContent =
+        data.set || "--";
+
+    document
+      .getElementById("marketValue")
+      .textContent =
+        data.value || "--";
+
+
+    /* ROUND RESULTS */
+
+    const ids = [
+      "r1100",
+      "r1300",
+      "r1500",
+      "r1700",
+      "r1900",
+      "r2100"
+    ];
+
+    for (const id of ids) {
+
+      const el =
+        document.getElementById(id);
+
+      if (
+        el &&
+        data.results
+      ) {
+        el.textContent =
+          data.results[id] ||
+          "--";
+      }
+
+    }
+
+
+    /* BIG RESULT */
+
+    if (
+      data.live &&
+      data.live !== "--" &&
+      data.live !== currentLive
+    ) {
+
+      animateLiveResult(
+        data.live
+      );
+
+    }
+
+  } catch (error) {
+    console.log(
+      "Refresh error",
+      error
+    );
+  }
+
+}
+
+
+/* CHECK EVERY 5 SECONDS */
+
+setInterval(
+  refreshBrazil2D,
+  5000
 );
 
 </script>
@@ -1059,39 +1566,28 @@ body {
 
 .logo {
   text-align: center;
-
   color: #109447;
-
   font-size: 27px;
-
   font-weight: 900;
-
   margin-bottom: 8px;
 }
 
 .sub {
   text-align: center;
-
   color: #777;
-
   margin-bottom: 28px;
 }
 
 .message {
   text-align: center;
-
   color: #d92727;
-
   font-weight: 800;
-
   margin-bottom: 18px;
 }
 
 label {
   display: block;
-
   font-weight: 800;
-
   margin-bottom: 8px;
 }
 
@@ -1238,7 +1734,8 @@ async function adminPage(DB) {
       row.result || "";
 
     if (row.set_value) {
-      setValue = row.set_value;
+      setValue =
+        row.set_value;
     }
 
     if (row.market_value) {
@@ -1278,27 +1775,18 @@ body {
 
 .admin {
   width: 100%;
-
   max-width: 500px;
-
   margin: auto;
-
   min-height: 100vh;
-
   background: #fff;
 }
 
 .header {
   background: #109447;
-
   color: #fff;
-
   padding: 22px;
-
   text-align: center;
-
   font-size: 24px;
-
   font-weight: 900;
 }
 
@@ -1381,23 +1869,16 @@ input {
 
 .links {
   display: flex;
-
   gap: 10px;
-
   margin-top: 20px;
 }
 
 .links a {
   flex: 1;
-
   text-align: center;
-
   padding: 14px 5px;
-
   border-radius: 12px;
-
   text-decoration: none;
-
   font-weight: 800;
 }
 
@@ -1581,6 +2062,7 @@ async function saveResults(request, env) {
         form.get(round.field) || ""
       ).trim();
 
+
     if (
       newResult &&
       !valid2D(newResult)
@@ -1695,7 +2177,7 @@ async function saveResults(request, env) {
 
 // ============================================================
 // HISTORY PAGE
-// SET VALUE / MARKET VALUE မပြပါ
+// DATE + 6 RESULT ONLY
 // ============================================================
 
 async function historyPage(DB) {
@@ -1728,7 +2210,9 @@ async function historyPage(DB) {
 
   const grouped = {};
 
+
   for (const row of rows) {
+
     if (!grouped[row.result_date]) {
       grouped[row.result_date] = {};
     }
@@ -1741,6 +2225,7 @@ async function historyPage(DB) {
       ] =
         row.result;
     }
+
   }
 
 
@@ -1784,6 +2269,7 @@ async function historyPage(DB) {
 </div>
 
 `;
+
       })
       .join("");
 
@@ -1821,13 +2307,9 @@ body {
 
 .page {
   width: 100%;
-
   max-width: 480px;
-
   min-height: 100vh;
-
   margin: auto;
-
   background: #fff;
 }
 
@@ -1836,7 +2318,7 @@ body {
 
   color: #fff;
 
-  min-height: 72px;
+  min-height: 66px;
 
   display: flex;
 
@@ -1849,24 +2331,21 @@ body {
 
 .back {
   font-size: 34px;
-
   margin-right: 15px;
-
   cursor: pointer;
 }
 
 .title {
-  font-size: 21px;
-
+  font-size: 20px;
   font-weight: 900;
 }
 
 .content {
-  padding: 18px;
+  padding: 16px;
 }
 
 .day {
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 
   background: #fff;
 
@@ -1878,7 +2357,7 @@ body {
     16px
     rgba(0,0,0,.08);
 
-  padding: 16px;
+  padding: 15px;
 }
 
 .date {
@@ -1888,7 +2367,7 @@ body {
 
   font-weight: 900;
 
-  margin-bottom: 15px;
+  margin-bottom: 14px;
 }
 
 .rounds {
@@ -1898,7 +2377,7 @@ body {
     1fr
     1fr;
 
-  gap: 9px;
+  gap: 8px;
 }
 
 .round {
@@ -1908,7 +2387,7 @@ body {
 
   border-radius: 12px;
 
-  padding: 11px;
+  padding: 10px;
 
   text-align: center;
 
@@ -1929,9 +2408,7 @@ body {
 
 .time {
   font-size: 12px;
-
   font-weight: 800;
-
   margin-bottom: 5px;
 }
 
@@ -1949,17 +2426,13 @@ body {
 
 .number {
   font-size: 27px;
-
   font-weight: 900;
-
   color: #111;
 }
 
 .empty {
   text-align: center;
-
   color: #999;
-
   padding: 80px 20px;
 }
 
@@ -2004,4 +2477,4 @@ body {
 
 </body>
 </html>`;
-}
+            }
