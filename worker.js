@@ -3,27 +3,67 @@ export default {
     const url = new URL(request.url);
 
     try {
+      // =========================
       // MAIN PAGE
+      // =========================
       if (url.pathname === "/" && request.method === "GET") {
-        return htmlResponse(await mainPage(env.DB));
+        return html(await mainPage(env.DB));
       }
 
+      // =========================
       // HISTORY
+      // =========================
       if (url.pathname === "/history" && request.method === "GET") {
-        return htmlResponse(await historyPage(env.DB));
+        return html(await historyPage(env.DB));
       }
 
-      // ADMIN PAGE
+      // =========================
+      // ADMIN LOGIN
+      // =========================
       if (url.pathname === "/admin" && request.method === "GET") {
-        return htmlResponse(adminPage());
+        const loggedIn = await isAdmin(request, env);
+
+        if (!loggedIn) {
+          return html(adminLoginPage());
+        }
+
+        return html(await adminPage(env.DB));
       }
 
-      // SAVE ADMIN RESULTS
+      if (url.pathname === "/admin/login" && request.method === "POST") {
+        return await adminLogin(request, env);
+      }
+
+      if (url.pathname === "/admin/logout") {
+        return new Response(null, {
+          status: 302,
+          headers: {
+            "Location": "/admin",
+            "Set-Cookie":
+              "brazil_admin=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
+          }
+        });
+      }
+
+      // =========================
+      // ADMIN SAVE
+      // =========================
       if (url.pathname === "/admin/save" && request.method === "POST") {
+        const loggedIn = await isAdmin(request, env);
+
+        if (!loggedIn) {
+          return Response.redirect(
+            new URL("/admin", request.url).toString(),
+            303
+          );
+        }
+
         return await saveResults(request, env);
       }
 
-      return new Response("Not Found", { status: 404 });
+      return new Response("Not Found", {
+        status: 404
+      });
 
     } catch (error) {
       return new Response(
@@ -40,29 +80,63 @@ export default {
 };
 
 
-/* ========================================
-   HELPERS
-======================================== */
+// ============================================================
+// SETTINGS
+// ============================================================
 
-function htmlResponse(html) {
-  return new Response(html, {
+const ROUNDS = [
+  {
+    time: "11:00 AM",
+    minutes: 11 * 60,
+    color: "green",
+    field: "r1100"
+  },
+  {
+    time: "01:00 PM",
+    minutes: 13 * 60,
+    color: "yellow",
+    field: "r1300"
+  },
+  {
+    time: "03:00 PM",
+    minutes: 15 * 60,
+    color: "blue",
+    field: "r1500"
+  },
+  {
+    time: "05:00 PM",
+    minutes: 17 * 60,
+    color: "green",
+    field: "r1700"
+  },
+  {
+    time: "07:00 PM",
+    minutes: 19 * 60,
+    color: "yellow",
+    field: "r1900"
+  },
+  {
+    time: "09:00 PM",
+    minutes: 21 * 60,
+    color: "blue",
+    field: "r2100"
+  }
+];
+
+
+// ============================================================
+// BASIC HELPERS
+// ============================================================
+
+function html(content, status = 200, extraHeaders = {}) {
+  return new Response(content, {
+    status,
     headers: {
       "Content-Type": "text/html; charset=UTF-8",
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      ...extraHeaders
     }
   });
-}
-
-
-function getMyanmarDate() {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Yangon",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
-
-  return formatter.format(new Date());
 }
 
 
@@ -76,58 +150,254 @@ function escapeHtml(value = "") {
 }
 
 
-const ROUNDS = [
-  ["11:00 AM", "green"],
-  ["01:00 PM", "yellow"],
-  ["03:00 PM", "blue"],
-  ["05:00 PM", "green"],
-  ["07:00 PM", "yellow"],
-  ["09:00 PM", "blue"]
-];
+function getYangonParts() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Yangon",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(new Date());
+
+  const values = {};
+
+  for (const part of parts) {
+    if (part.type !== "literal") {
+      values[part.type] = part.value;
+    }
+  }
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second)
+  };
+}
 
 
-/* ========================================
-   MAIN PAGE
-======================================== */
+function pad2(number) {
+  return String(number).padStart(2, "0");
+}
+
+
+function getMyanmarDate() {
+  const p = getYangonParts();
+
+  return (
+    p.year +
+    "-" +
+    pad2(p.month) +
+    "-" +
+    pad2(p.day)
+  );
+}
+
+
+function getCurrentMinutes() {
+  const p = getYangonParts();
+  return p.hour * 60 + p.minute;
+}
+
+
+function valid2D(value) {
+  return /^[0-9]{2}$/.test(String(value || ""));
+}
+
+
+// ============================================================
+// ADMIN SESSION
+// ============================================================
+
+async function createSignature(value, secret) {
+  const encoder = new TextEncoder();
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    {
+      name: "HMAC",
+      hash: "SHA-256"
+    },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(value)
+  );
+
+  return arrayBufferToBase64Url(signature);
+}
+
+
+function arrayBufferToBase64Url(buffer) {
+  const bytes = new Uint8Array(buffer);
+
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+
+function getCookie(request, name) {
+  const cookie = request.headers.get("Cookie") || "";
+
+  const pieces = cookie.split(";");
+
+  for (const piece of pieces) {
+    const [key, ...rest] = piece.trim().split("=");
+
+    if (key === name) {
+      return rest.join("=");
+    }
+  }
+
+  return "";
+}
+
+
+async function createAdminToken(secret) {
+  const expires =
+    Date.now() +
+    12 * 60 * 60 * 1000;
+
+  const data = String(expires);
+
+  const signature =
+    await createSignature(data, secret);
+
+  return data + "." + signature;
+}
+
+
+async function isAdmin(request, env) {
+  if (!env.ADMIN_PASSWORD) {
+    return false;
+  }
+
+  const token =
+    getCookie(request, "brazil_admin");
+
+  if (!token) {
+    return false;
+  }
+
+  const pieces = token.split(".");
+
+  if (pieces.length !== 2) {
+    return false;
+  }
+
+  const expires = pieces[0];
+  const signature = pieces[1];
+
+  if (Number(expires) < Date.now()) {
+    return false;
+  }
+
+  const expected =
+    await createSignature(
+      expires,
+      env.ADMIN_PASSWORD
+    );
+
+  return signature === expected;
+}
+
+
+async function adminLogin(request, env) {
+  const form =
+    await request.formData();
+
+  const password =
+    String(
+      form.get("password") || ""
+    );
+
+  if (
+    !env.ADMIN_PASSWORD ||
+    password !== env.ADMIN_PASSWORD
+  ) {
+    return html(
+      adminLoginPage(
+        "Wrong password."
+      ),
+      401
+    );
+  }
+
+  const token =
+    await createAdminToken(
+      env.ADMIN_PASSWORD
+    );
+
+  return new Response(null, {
+    status: 303,
+    headers: {
+      "Location":
+        new URL(
+          "/admin",
+          request.url
+        ).toString(),
+
+      "Set-Cookie":
+        "brazil_admin=" +
+        token +
+        "; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict"
+    }
+  });
+}
+
+
+// ============================================================
+// MAIN PAGE
+// ============================================================
 
 async function mainPage(DB) {
   const today = getMyanmarDate();
 
-  const query = await DB.prepare(`
-    SELECT
-      result_date,
-      round_time,
-      result,
-      set_value,
-      market_value
-    FROM results
-    WHERE result_date = ?
-    ORDER BY
-      CASE round_time
-        WHEN '11:00 AM' THEN 1
-        WHEN '01:00 PM' THEN 2
-        WHEN '03:00 PM' THEN 3
-        WHEN '05:00 PM' THEN 4
-        WHEN '07:00 PM' THEN 5
-        WHEN '09:00 PM' THEN 6
-        ELSE 99
-      END
-  `).bind(today).all();
+  const currentMinutes =
+    getCurrentMinutes();
 
-  const rows = query.results || [];
+  const query =
+    await DB.prepare(`
+      SELECT
+        result_date,
+        round_time,
+        result,
+        set_value,
+        market_value
+      FROM results
+      WHERE result_date = ?
+    `)
+    .bind(today)
+    .all();
 
-  const resultMap = {};
+  const rows =
+    query.results || [];
 
-  let liveResult = "--";
+  const databaseMap = {};
+
   let setValue = "--";
   let marketValue = "--";
 
   for (const row of rows) {
-    resultMap[row.round_time] = row.result || "--";
-
-    if (row.result && row.result !== "--") {
-      liveResult = row.result;
-    }
+    databaseMap[row.round_time] = row;
 
     if (row.set_value) {
       setValue = row.set_value;
@@ -138,18 +408,47 @@ async function mainPage(DB) {
     }
   }
 
-  const firstDigit =
-    liveResult !== "--" && liveResult.length >= 1
-      ? liveResult.charAt(0)
-      : "-";
+  const displayResults = {};
 
-  const secondDigit =
-    liveResult !== "--" && liveResult.length >= 2
-      ? liveResult.charAt(1)
-      : "-";
+  let liveResult = "--";
+
+  for (const round of ROUNDS) {
+    const row =
+      databaseMap[round.time];
+
+    const reached =
+      currentMinutes >= round.minutes;
+
+    if (
+      reached &&
+      row &&
+      valid2D(row.result)
+    ) {
+      displayResults[round.time] =
+        row.result;
+
+      liveResult =
+        row.result;
+    } else {
+      displayResults[round.time] =
+        "--";
+    }
+  }
+
+  let firstDigit = "-";
+  let secondDigit = "-";
+
+  if (valid2D(liveResult)) {
+    firstDigit =
+      liveResult.charAt(0);
+
+    secondDigit =
+      liveResult.charAt(1);
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
+
 <head>
 
 <meta charset="UTF-8">
@@ -190,7 +489,9 @@ body {
 }
 
 
-/* LIVE TITLE */
+/* =====================
+   LIVE HEADER
+===================== */
 
 .live-header {
   padding: 22px 24px;
@@ -251,7 +552,9 @@ body {
 }
 
 
-/* HERO */
+/* =====================
+   HERO
+===================== */
 
 .hero {
   position: relative;
@@ -302,23 +605,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
-
   line-height: .9;
-
-  margin:
-    5px
-    0
-    30px;
+  margin: 5px 0 30px;
 }
 
 .digit {
-  font-size:
-    clamp(
-      128px,
-      37vw,
-      176px
-    );
+  font-size: clamp(
+    128px,
+    37vw,
+    176px
+  );
 
   font-weight: 900;
   letter-spacing: -10px;
@@ -340,16 +636,16 @@ body {
 }
 
 
-/* VALUE CARD */
+/* =====================
+   VALUES
+===================== */
 
 .value-card {
   position: relative;
   z-index: 5;
 
   width:
-    calc(
-      100% - 46px
-    );
+    calc(100% - 46px);
 
   margin:
     -36px
@@ -361,16 +657,12 @@ body {
   border-radius: 24px;
 
   box-shadow:
-    0
-    5px
-    18px
+    0 5px 18px
     rgba(0,0,0,.13);
 
   display: flex;
 
-  padding:
-    25px
-    8px;
+  padding: 25px 8px;
 }
 
 .value-item {
@@ -381,9 +673,7 @@ body {
 
 .value-item:first-child {
   border-right:
-    1px
-    solid
-    #e4e4e4;
+    1px solid #e4e4e4;
 }
 
 .value-label {
@@ -401,20 +691,17 @@ body {
 }
 
 
-/* ROUND RESULTS */
+/* =====================
+   ROUNDS
+===================== */
 
 .round-grid {
-  padding:
-    0
-    22px;
+  padding: 0 22px;
 
   display: grid;
 
   grid-template-columns:
-    repeat(
-      2,
-      1fr
-    );
+    repeat(2, 1fr);
 
   gap: 13px;
 }
@@ -423,19 +710,15 @@ body {
   height: 112px;
 
   border:
-    2px
-    solid;
+    2px solid;
 
   border-radius: 19px;
 
   background: #fff;
 
   display: flex;
-
   flex-direction: column;
-
   align-items: center;
-
   justify-content: center;
 }
 
@@ -477,7 +760,9 @@ body {
 }
 
 
-/* HISTORY */
+/* =====================
+   HISTORY
+===================== */
 
 .bottom {
   padding:
@@ -592,18 +877,15 @@ body {
 
   <div class="hero-content">
 
-
     <div class="big-result">
 
-      <span
-        class="digit digit-one"
-        id="digit1"
-      >${escapeHtml(firstDigit)}</span>
+      <span class="digit digit-one">
+        ${escapeHtml(firstDigit)}
+      </span>
 
-      <span
-        class="digit digit-two"
-        id="digit2"
-      >${escapeHtml(secondDigit)}</span>
+      <span class="digit digit-two">
+        ${escapeHtml(secondDigit)}
+      </span>
 
     </div>
 
@@ -615,7 +897,6 @@ body {
       --/--/---- | --:--:-- --
     </div>
 
-
   </div>
 
 </section>
@@ -623,17 +904,13 @@ body {
 
 <section class="value-card">
 
-
   <div class="value-item">
 
     <div class="value-label">
       SET VALUE
     </div>
 
-    <div
-      class="value-number"
-      id="setValue"
-    >
+    <div class="value-number">
       ${escapeHtml(setValue)}
     </div>
 
@@ -646,33 +923,33 @@ body {
       MARKET VALUE
     </div>
 
-    <div
-      class="value-number"
-      id="marketValue"
-    >
+    <div class="value-number">
       ${escapeHtml(marketValue)}
     </div>
 
   </div>
-
 
 </section>
 
 
 <section class="round-grid">
 
-${ROUNDS.map(([time, color]) => `
-  <div class="round ${color}">
+${ROUNDS.map(round => `
 
-    <div class="round-time">
-      ${time}
-    </div>
+<div class="round ${round.color}">
 
-    <div class="round-number">
-      ${escapeHtml(resultMap[time] || "--")}
-    </div>
-
+  <div class="round-time">
+    ${round.time}
   </div>
+
+  <div class="round-number">
+    ${escapeHtml(
+      displayResults[round.time] || "--"
+    )}
+  </div>
+
+</div>
+
 `).join("")}
 
 </section>
@@ -701,8 +978,7 @@ function updateClock() {
 
   const now = new Date();
 
-
-  const parts =
+  const date =
     new Intl.DateTimeFormat(
       "en-GB",
       {
@@ -712,7 +988,6 @@ function updateClock() {
         year: "numeric"
       }
     ).format(now);
-
 
   const time =
     new Intl.DateTimeFormat(
@@ -726,16 +1001,11 @@ function updateClock() {
       }
     ).format(now);
 
-
   document
     .getElementById("dateTime")
     .textContent =
-      parts +
-      " | " +
-      time;
-
+      date + " | " + time;
 }
-
 
 updateClock();
 
@@ -746,19 +1016,256 @@ setInterval(
 
 </script>
 
+</body>
+</html>`;
+}
+
+
+// ============================================================
+// ADMIN LOGIN PAGE
+// ============================================================
+
+function adminLoginPage(message = "") {
+  return `<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Brazil 2D Admin</title>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f0f5f2;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.page {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  margin: auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 25px;
+}
+
+.card {
+  width: 100%;
+
+  background: #fff;
+
+  border-radius: 25px;
+
+  padding: 32px 24px;
+
+  box-shadow:
+    0 8px 30px
+    rgba(0,0,0,.10);
+}
+
+.logo {
+  text-align: center;
+
+  color: #109447;
+
+  font-size: 27px;
+
+  font-weight: 900;
+
+  margin-bottom: 8px;
+}
+
+.sub {
+  text-align: center;
+
+  color: #777;
+
+  margin-bottom: 28px;
+}
+
+.message {
+  text-align: center;
+
+  color: #d92727;
+
+  font-weight: 800;
+
+  margin-bottom: 18px;
+}
+
+label {
+  display: block;
+
+  font-weight: 800;
+
+  margin-bottom: 8px;
+}
+
+input {
+  width: 100%;
+  height: 52px;
+
+  border:
+    1px solid #ccc;
+
+  border-radius: 12px;
+
+  padding: 0 14px;
+
+  font-size: 17px;
+}
+
+button {
+  width: 100%;
+  height: 54px;
+
+  border: 0;
+
+  border-radius: 14px;
+
+  margin-top: 20px;
+
+  background: #109447;
+
+  color: #fff;
+
+  font-size: 18px;
+
+  font-weight: 900;
+}
+
+.home {
+  display: block;
+
+  text-align: center;
+
+  margin-top: 20px;
+
+  color: #0762a9;
+
+  text-decoration: none;
+
+  font-weight: 800;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="page">
+
+<div class="card">
+
+<div class="logo">
+  BRAZIL 2D 🇧🇷
+</div>
+
+<div class="sub">
+  ADMIN LOGIN
+</div>
+
+${
+  message
+    ? `<div class="message">${escapeHtml(message)}</div>`
+    : ""
+}
+
+<form
+  method="POST"
+  action="/admin/login"
+>
+
+<label>
+  Password
+</label>
+
+<input
+  type="password"
+  name="password"
+  required
+  autocomplete="current-password"
+>
+
+<button type="submit">
+  LOGIN
+</button>
+
+</form>
+
+<a
+  href="/"
+  class="home"
+>
+  ← Back to Brazil 2D
+</a>
+
+</div>
+
+</div>
 
 </body>
 </html>`;
 }
 
 
-/* ========================================
-   ADMIN PAGE
-======================================== */
+// ============================================================
+// ADMIN PAGE
+// ============================================================
 
-function adminPage(message = "") {
+async function adminPage(DB) {
+  const today =
+    getMyanmarDate();
 
-  const today = getMyanmarDate();
+  const query =
+    await DB.prepare(`
+      SELECT
+        round_time,
+        result,
+        set_value,
+        market_value
+      FROM results
+      WHERE result_date = ?
+    `)
+    .bind(today)
+    .all();
+
+  const rows =
+    query.results || [];
+
+  const map = {};
+
+  let setValue = "";
+  let marketValue = "";
+
+  for (const row of rows) {
+    map[row.round_time] =
+      row.result || "";
+
+    if (row.set_value) {
+      setValue = row.set_value;
+    }
+
+    if (row.market_value) {
+      marketValue =
+        row.market_value;
+    }
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -791,6 +1298,7 @@ body {
 
 .admin {
   width: 100%;
+
   max-width: 500px;
 
   margin: auto;
@@ -816,16 +1324,6 @@ body {
 
 .content {
   padding: 22px;
-}
-
-.message {
-  text-align: center;
-
-  color: #109447;
-
-  font-weight: 800;
-
-  margin-bottom: 16px;
 }
 
 label {
@@ -883,13 +1381,11 @@ input {
 
 .card label {
   margin-top: 0;
-
   color: #109447;
 }
 
-button {
+.save {
   width: 100%;
-
   height: 54px;
 
   margin-top: 24px;
@@ -907,18 +1403,36 @@ button {
   font-weight: 900;
 }
 
-.home {
-  display: block;
+.links {
+  display: flex;
+
+  gap: 10px;
+
+  margin-top: 20px;
+}
+
+.links a {
+  flex: 1;
 
   text-align: center;
 
-  margin-top: 20px;
+  padding: 14px 5px;
 
-  color: #0762a9;
+  border-radius: 12px;
 
   text-decoration: none;
 
   font-weight: 800;
+}
+
+.home {
+  color: #0762a9;
+  background: #edf6fc;
+}
+
+.logout {
+  color: #c62828;
+  background: #fff0f0;
 }
 
 </style>
@@ -927,42 +1441,18 @@ button {
 
 <body>
 
-
 <div class="admin">
 
-
 <div class="header">
-
   BRAZIL 2D ADMIN 🇧🇷
-
 </div>
 
-
 <div class="content">
-
-
-${message
-  ? `<div class="message">${escapeHtml(message)}</div>`
-  : ""
-}
-
 
 <form
   method="POST"
   action="/admin/save"
 >
-
-
-<label>
-  Admin Password
-</label>
-
-<input
-  type="password"
-  name="password"
-  required
->
-
 
 <label>
   Result Date
@@ -983,6 +1473,7 @@ ${message
 <input
   type="text"
   name="set_value"
+  value="${escapeHtml(setValue)}"
   placeholder="Example: 2,081.50"
 >
 
@@ -994,6 +1485,7 @@ ${message
 <input
   type="text"
   name="market_value"
+  value="${escapeHtml(marketValue)}"
   placeholder="Example: 69,135.01"
 >
 
@@ -1005,16 +1497,22 @@ ${message
 
 <div class="grid">
 
+${ROUNDS.map(round => `
 
 <div class="card">
 
 <label>
-  11:00 AM
+  ${round.time}
 </label>
 
 <input
   type="text"
-  name="r1100"
+  name="${round.field}"
+  value="${
+    valid2D(map[round.time])
+      ? escapeHtml(map[round.time])
+      : ""
+  }"
   maxlength="2"
   inputmode="numeric"
   placeholder="--"
@@ -1022,182 +1520,78 @@ ${message
 
 </div>
 
+`).join("")}
 
-<div class="card">
+</div>
 
-<label>
-  01:00 PM
-</label>
 
-<input
-  type="text"
-  name="r1300"
-  maxlength="2"
-  inputmode="numeric"
-  placeholder="--"
+<button
+  class="save"
+  type="submit"
 >
-
-</div>
-
-
-<div class="card">
-
-<label>
-  03:00 PM
-</label>
-
-<input
-  type="text"
-  name="r1500"
-  maxlength="2"
-  inputmode="numeric"
-  placeholder="--"
->
-
-</div>
-
-
-<div class="card">
-
-<label>
-  05:00 PM
-</label>
-
-<input
-  type="text"
-  name="r1700"
-  maxlength="2"
-  inputmode="numeric"
-  placeholder="--"
->
-
-</div>
-
-
-<div class="card">
-
-<label>
-  07:00 PM
-</label>
-
-<input
-  type="text"
-  name="r1900"
-  maxlength="2"
-  inputmode="numeric"
-  placeholder="--"
->
-
-</div>
-
-
-<div class="card">
-
-<label>
-  09:00 PM
-</label>
-
-<input
-  type="text"
-  name="r2100"
-  maxlength="2"
-  inputmode="numeric"
-  placeholder="--"
->
-
-</div>
-
-
-</div>
-
-
-<button type="submit">
-
   SAVE RESULTS
-
 </button>
-
 
 </form>
 
+
+<div class="links">
 
 <a
   class="home"
   href="/"
 >
-  ← Back to Brazil 2D
+  Main Page
 </a>
 
+<a
+  class="logout"
+  href="/admin/logout"
+>
+  Logout
+</a>
 
 </div>
 
 </div>
 
+</div>
 
 </body>
 </html>`;
 }
 
 
-/* ========================================
-   SAVE RESULT
-======================================== */
+// ============================================================
+// SAVE RESULTS
+// ============================================================
 
 async function saveResults(request, env) {
-
   const form =
     await request.formData();
-
-
-  const password =
-    String(
-      form.get("password") || ""
-    );
-
-
-  if (
-    !env.ADMIN_PASSWORD ||
-    password !== env.ADMIN_PASSWORD
-  ) {
-
-    return new Response(
-      adminPage(
-        "Wrong admin password."
-      ),
-      {
-        status: 401,
-        headers: {
-          "Content-Type":
-            "text/html; charset=UTF-8"
-        }
-      }
-    );
-
-  }
-
 
   const resultDate =
     String(
       form.get("result_date") || ""
+    ).trim();
+
+  if (
+    !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(
+      resultDate
+    )
+  ) {
+    return new Response(
+      "Invalid date",
+      {
+        status: 400
+      }
     );
-
-
-  if (!resultDate) {
-
-    return htmlResponse(
-      adminPage(
-        "Result date is required."
-      )
-    );
-
   }
-
 
   const setValue =
     String(
       form.get("set_value") || ""
     ).trim();
-
 
   const marketValue =
     String(
@@ -1205,63 +1599,71 @@ async function saveResults(request, env) {
     ).trim();
 
 
-  const inputResults = [
-
-    [
-      "11:00 AM",
-      String(form.get("r1100") || "").trim()
-    ],
-
-    [
-      "01:00 PM",
-      String(form.get("r1300") || "").trim()
-    ],
-
-    [
-      "03:00 PM",
-      String(form.get("r1500") || "").trim()
-    ],
-
-    [
-      "05:00 PM",
-      String(form.get("r1700") || "").trim()
-    ],
-
-    [
-      "07:00 PM",
-      String(form.get("r1900") || "").trim()
-    ],
-
-    [
-      "09:00 PM",
-      String(form.get("r2100") || "").trim()
-    ]
-
-  ];
-
-
-  for (
-    const [roundTime, result]
-    of inputResults
-  ) {
-
-    if (!result) {
-      continue;
-    }
-
+  for (const round of ROUNDS) {
+    const newResult =
+      String(
+        form.get(round.field) || ""
+      ).trim();
 
     if (
-      !/^[0-9]{2}$/.test(result)
+      newResult &&
+      !valid2D(newResult)
     ) {
+      return new Response(
+        round.time +
+        " result must be exactly 2 digits.",
+        {
+          status: 400
+        }
+      );
+    }
 
-      return htmlResponse(
-        adminPage(
-          roundTime +
-          " result must be exactly 2 digits."
-        )
+
+    const existing =
+      await env.DB.prepare(`
+        SELECT
+          result,
+          set_value,
+          market_value
+        FROM results
+        WHERE
+          result_date = ?
+          AND round_time = ?
+        LIMIT 1
+      `)
+      .bind(
+        resultDate,
+        round.time
+      )
+      .first();
+
+
+    const finalResult =
+      newResult ||
+      (
+        existing &&
+        valid2D(existing.result)
+          ? existing.result
+          : "--"
       );
 
-    }
+
+    const finalSet =
+      setValue ||
+      (
+        existing
+          ? existing.set_value
+          : null
+      );
+
+
+    const finalMarket =
+      marketValue ||
+      (
+        existing
+          ? existing.market_value
+          : null
+      );
 
 
     await env.DB.prepare(`
@@ -1273,9 +1675,20 @@ async function saveResults(request, env) {
         market_value,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 
-      ON CONFLICT(result_date, round_time)
+      VALUES (
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        CURRENT_TIMESTAMP
+      )
+
+      ON CONFLICT(
+        result_date,
+        round_time
+      )
 
       DO UPDATE SET
         result = excluded.result,
@@ -1285,29 +1698,30 @@ async function saveResults(request, env) {
     `)
     .bind(
       resultDate,
-      roundTime,
-      result,
-      setValue || null,
-      marketValue || null
+      round.time,
+      finalResult,
+      finalSet,
+      finalMarket
     )
     .run();
-
   }
 
 
   return Response.redirect(
-    new URL("/", request.url).toString(),
+    new URL(
+      "/admin",
+      request.url
+    ).toString(),
     303
   );
 }
 
 
-/* ========================================
-   HISTORY PAGE
-======================================== */
+// ============================================================
+// HISTORY
+// ============================================================
 
 async function historyPage(DB) {
-
   const query =
     await DB.prepare(`
       SELECT
@@ -1316,79 +1730,80 @@ async function historyPage(DB) {
         result,
         set_value,
         market_value
+
       FROM results
 
       ORDER BY
         result_date DESC,
 
         CASE round_time
-          WHEN '11:00 AM' THEN 1
-          WHEN '01:00 PM' THEN 2
-          WHEN '03:00 PM' THEN 3
-          WHEN '05:00 PM' THEN 4
-          WHEN '07:00 PM' THEN 5
-          WHEN '09:00 PM' THEN 6
-          ELSE 99
-        END
-    `).all();
 
+          WHEN '11:00 AM'
+            THEN 1
+
+          WHEN '01:00 PM'
+            THEN 2
+
+          WHEN '03:00 PM'
+            THEN 3
+
+          WHEN '05:00 PM'
+            THEN 4
+
+          WHEN '07:00 PM'
+            THEN 5
+
+          WHEN '09:00 PM'
+            THEN 6
+
+          ELSE 99
+
+        END
+    `)
+    .all();
 
   const rows =
     query.results || [];
 
-
   const grouped = {};
 
-
   for (const row of rows) {
-
-    if (
-      !grouped[row.result_date]
-    ) {
-
+    if (!grouped[row.result_date]) {
       grouped[row.result_date] = {
         setValue: "",
         marketValue: "",
         results: {}
       };
-
     }
 
-
-    grouped[
-      row.result_date
-    ].results[
-      row.round_time
-    ] =
-      row.result;
-
+    if (valid2D(row.result)) {
+      grouped[
+        row.result_date
+      ].results[
+        row.round_time
+      ] =
+        row.result;
+    }
 
     if (row.set_value) {
-
       grouped[
         row.result_date
       ].setValue =
         row.set_value;
-
     }
 
-
     if (row.market_value) {
-
       grouped[
         row.result_date
       ].marketValue =
         row.market_value;
-
     }
-
   }
 
 
   const historyHtml =
     Object.keys(grouped)
       .map(date => {
-
         const day =
           grouped[date];
 
@@ -1400,39 +1815,45 @@ async function historyPage(DB) {
   ${escapeHtml(date)}
 </div>
 
-
 <div class="values">
 
-  <span>
-    SET:
-    <b>
-      ${escapeHtml(day.setValue || "--")}
-    </b>
-  </span>
+<div>
+  SET VALUE
+  <strong>
+    ${escapeHtml(
+      day.setValue || "--"
+    )}
+  </strong>
+</div>
 
-  <span>
-    MARKET:
-    <b>
-      ${escapeHtml(day.marketValue || "--")}
-    </b>
-  </span>
+<div>
+  MARKET VALUE
+  <strong>
+    ${escapeHtml(
+      day.marketValue || "--"
+    )}
+  </strong>
+</div>
 
 </div>
 
 
 <div class="rounds">
 
-${ROUNDS.map(([time, color]) => `
+${ROUNDS.map(round => `
 
-<div class="round ${color}">
+<div class="round ${round.color}">
 
-  <div class="time">
-    ${time}
-  </div>
+<div class="time">
+  ${round.time}
+</div>
 
-  <div class="number">
-    ${escapeHtml(day.results[time] || "--")}
-  </div>
+<div class="number">
+  ${escapeHtml(
+    day.results[round.time] ||
+    "--"
+  )}
+</div>
 
 </div>
 
@@ -1440,11 +1861,9 @@ ${ROUNDS.map(([time, color]) => `
 
 </div>
 
-
 </div>
 
 `;
-
       })
       .join("");
 
@@ -1549,22 +1968,45 @@ body {
 
   font-weight: 900;
 
-  margin-bottom: 12px;
+  margin-bottom: 13px;
 }
 
 .values {
-  display: flex;
+  display: grid;
 
-  justify-content:
-    space-between;
+  grid-template-columns:
+    1fr
+    1fr;
 
   gap: 10px;
 
-  font-size: 12px;
+  margin-bottom: 15px;
 
   color: #109447;
 
-  margin-bottom: 15px;
+  font-size: 11px;
+
+  font-weight: 800;
+}
+
+.values div {
+  text-align: center;
+
+  padding: 10px 4px;
+
+  background: #f4faf6;
+
+  border-radius: 9px;
+}
+
+.values strong {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #111;
+
+  font-size: 14px;
 }
 
 .rounds {
@@ -1629,22 +2071,20 @@ body {
 
 <body>
 
-
 <div class="page">
-
 
 <div class="header">
 
-  <div
-    class="back"
-    onclick="history.back()"
-  >
-    ‹
-  </div>
+<div
+  class="back"
+  onclick="history.back()"
+>
+  ‹
+</div>
 
-  <div class="title">
-    BRAZIL 2D HISTORY 🇧🇷
-  </div>
+<div class="title">
+  BRAZIL 2D HISTORY 🇧🇷
+</div>
 
 </div>
 
@@ -1662,11 +2102,8 @@ ${
 
 </div>
 
-
 </div>
 
-
 </body>
-
 </html>`;
-  }
+          }
