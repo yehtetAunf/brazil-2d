@@ -1,101 +1,205 @@
+// ============================================================
+// BRAZIL 2D
+// Cloudflare Worker + D1
+// Live SET / VALUE + Live 2D
+// 6 Rounds
+// Final Admin Result Hold = 3 minutes
+// ============================================================
+
+const ROUNDS = [
+  {
+    time: "11:00 AM",
+    minutes: 11 * 60,
+    id: "r1100",
+    field: "r1100",
+    color: "green"
+  },
+  {
+    time: "01:00 PM",
+    minutes: 13 * 60,
+    id: "r1300",
+    field: "r1300",
+    color: "yellow"
+  },
+  {
+    time: "03:00 PM",
+    minutes: 15 * 60,
+    id: "r1500",
+    field: "r1500",
+    color: "blue"
+  },
+  {
+    time: "05:00 PM",
+    minutes: 17 * 60,
+    id: "r1700",
+    field: "r1700",
+    color: "green"
+  },
+  {
+    time: "07:00 PM",
+    minutes: 19 * 60,
+    id: "r1900",
+    field: "r1900",
+    color: "yellow"
+  },
+  {
+    time: "09:00 PM",
+    minutes: 21 * 60,
+    id: "r2100",
+    field: "r2100",
+    color: "blue"
+  }
+];
+
+const RESULT_HOLD_SECONDS = 180;
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     try {
 
-      // =====================================================
+      // ======================================================
       // USER MAIN PAGE
-      // =====================================================
-      if (url.pathname === "/" && request.method === "GET") {
-        return html(await mainPage(env.DB));
-      }
-
-      // =====================================================
-      // LIVE API
-      // =====================================================
+      // ======================================================
       if (
-        (url.pathname === "/api/live" || url.pathname === "/api/today") &&
+        url.pathname === "/" &&
         request.method === "GET"
       ) {
-        const data = await getLiveData(env.DB);
-
-        return new Response(JSON.stringify(data), {
-          headers: {
-            "Content-Type": "application/json; charset=UTF-8",
-            "Cache-Control": "no-store, no-cache, must-revalidate"
-          }
-        });
+        return html(
+          await mainPage(env.DB)
+        );
       }
 
-      // =====================================================
+      // ======================================================
+      // LIVE API
+      // ======================================================
+      if (
+        url.pathname === "/api/live" &&
+        request.method === "GET"
+      ) {
+        return json(
+          await getLiveState(env.DB)
+        );
+      }
+
+      // ======================================================
       // HISTORY
-      // =====================================================
-      if (url.pathname === "/history" && request.method === "GET") {
-        return html(await historyPage(env.DB));
+      // ======================================================
+      if (
+        url.pathname === "/history" &&
+        request.method === "GET"
+      ) {
+        return html(
+          await historyPage(env.DB)
+        );
       }
 
-      // =====================================================
-      // ADMIN PAGE
-      // =====================================================
-      if (url.pathname === "/admin" && request.method === "GET") {
-        const loggedIn = await isAdmin(request, env);
+      // ======================================================
+      // ADMIN
+      // ======================================================
+      if (
+        url.pathname === "/admin" &&
+        request.method === "GET"
+      ) {
+        const loggedIn =
+          await isAdmin(request, env);
 
         if (!loggedIn) {
-          return html(adminLoginPage());
+          return html(
+            adminLoginPage()
+          );
         }
 
-        return html(await adminPage(env.DB, url.searchParams.get("date")));
+        return html(
+          await adminPage(
+            env.DB,
+            url.searchParams.get("date")
+          )
+        );
       }
 
-      // =====================================================
+      // ======================================================
       // ADMIN LOGIN
-      // =====================================================
-      if (url.pathname === "/admin/login" && request.method === "POST") {
-        return await adminLogin(request, env);
+      // ======================================================
+      if (
+        url.pathname === "/admin/login" &&
+        request.method === "POST"
+      ) {
+        return await adminLogin(
+          request,
+          env
+        );
       }
 
-      // =====================================================
+      // ======================================================
       // ADMIN LOGOUT
-      // =====================================================
-      if (url.pathname === "/admin/logout") {
-        return new Response(null, {
-          status: 302,
-          headers: {
-            Location: "/admin",
-            "Set-Cookie":
-              "brazil_admin=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
+      // ======================================================
+      if (
+        url.pathname === "/admin/logout"
+      ) {
+        return new Response(
+          null,
+          {
+            status: 302,
+            headers: {
+              Location: "/admin",
+
+              "Set-Cookie":
+                "brazil_admin=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
+            }
           }
-        });
+        );
       }
 
-      // =====================================================
+      // ======================================================
       // ADMIN SAVE
-      // =====================================================
-      if (url.pathname === "/admin/save" && request.method === "POST") {
-        const loggedIn = await isAdmin(request, env);
+      // ======================================================
+      if (
+        url.pathname === "/admin/save" &&
+        request.method === "POST"
+      ) {
+        const loggedIn =
+          await isAdmin(
+            request,
+            env
+          );
 
         if (!loggedIn) {
           return Response.redirect(
-            new URL("/admin", request.url).toString(),
+            new URL(
+              "/admin",
+              request.url
+            ).toString(),
             303
           );
         }
 
-        return await saveResults(request, env);
+        return await saveResults(
+          request,
+          env
+        );
       }
 
-      return new Response("Not Found", {
-        status: 404
-      });
+      return new Response(
+        "Not Found",
+        {
+          status: 404
+        }
+      );
 
     } catch (error) {
+
+      console.error(error);
+
       return new Response(
-        "Brazil 2D Error: " + error.message,
+        "Brazil 2D Error: " +
+        error.message,
         {
           status: 500,
           headers: {
-            "Content-Type": "text/plain; charset=UTF-8"
+            "Content-Type":
+              "text/plain; charset=UTF-8"
           }
         }
       );
@@ -105,71 +209,47 @@ export default {
 
 
 // ============================================================
-// 6 ROUND SETTINGS
-// ============================================================
-
-const ROUNDS = [
-  {
-    time: "11:00 AM",
-    minutes: 11 * 60,
-    field: "r1100",
-    id: "r1100",
-    color: "green"
-  },
-  {
-    time: "01:00 PM",
-    minutes: 13 * 60,
-    field: "r1300",
-    id: "r1300",
-    color: "yellow"
-  },
-  {
-    time: "03:00 PM",
-    minutes: 15 * 60,
-    field: "r1500",
-    id: "r1500",
-    color: "blue"
-  },
-  {
-    time: "05:00 PM",
-    minutes: 17 * 60,
-    field: "r1700",
-    id: "r1700",
-    color: "green"
-  },
-  {
-    time: "07:00 PM",
-    minutes: 19 * 60,
-    field: "r1900",
-    id: "r1900",
-    color: "yellow"
-  },
-  {
-    time: "09:00 PM",
-    minutes: 21 * 60,
-    field: "r2100",
-    id: "r2100",
-    color: "blue"
-  }
-];
-
-
-// ============================================================
-// BASIC HELPERS
+// RESPONSE HELPERS
 // ============================================================
 
 function html(content, status = 200) {
-  return new Response(content, {
-    status,
-    headers: {
-      "Content-Type": "text/html; charset=UTF-8",
-      "Cache-Control": "no-store, no-cache, must-revalidate"
+
+  return new Response(
+    content,
+    {
+      status,
+      headers: {
+        "Content-Type":
+          "text/html; charset=UTF-8",
+
+        "Cache-Control":
+          "no-store, no-cache, must-revalidate"
+      }
     }
-  });
+  );
+}
+
+
+function json(data, status = 200) {
+
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        "Content-Type":
+          "application/json; charset=UTF-8",
+
+        "Cache-Control":
+          "no-store, no-cache, must-revalidate"
+      }
+    }
+  );
 }
 
 
 function escapeHtml(value = "") {
+
   return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -179,50 +259,118 @@ function escapeHtml(value = "") {
 }
 
 
-function pad2(number) {
-  return String(number).padStart(2, "0");
+function valid2D(value) {
+
+  return /^[0-9]{2}$/.test(
+    String(value || "")
+  );
 }
 
 
+function pad2(number) {
+
+  return String(number)
+    .padStart(2, "0");
+}
+
+
+// ============================================================
+// MYANMAR TIME
+// ============================================================
+
 function getYangonParts() {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Yangon",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).formatToParts(new Date());
+
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-GB",
+      {
+        timeZone:
+          "Asia/Yangon",
+
+        year:
+          "numeric",
+
+        month:
+          "2-digit",
+
+        day:
+          "2-digit",
+
+        hour:
+          "2-digit",
+
+        minute:
+          "2-digit",
+
+        second:
+          "2-digit",
+
+        hour12:
+          false
+      }
+    ).formatToParts(
+      new Date()
+    );
 
   const values = {};
 
   for (const part of parts) {
-    if (part.type !== "literal") {
-      values[part.type] = part.value;
+
+    if (
+      part.type !==
+      "literal"
+    ) {
+      values[
+        part.type
+      ] =
+        part.value;
     }
   }
 
-  let hour = Number(values.hour);
+  let hour =
+    Number(
+      values.hour
+    );
 
   if (hour === 24) {
     hour = 0;
   }
 
   return {
-    year: Number(values.year),
-    month: Number(values.month),
-    day: Number(values.day),
+    year:
+      Number(
+        values.year
+      ),
+
+    month:
+      Number(
+        values.month
+      ),
+
+    day:
+      Number(
+        values.day
+      ),
+
     hour,
-    minute: Number(values.minute),
-    second: Number(values.second)
+
+    minute:
+      Number(
+        values.minute
+      ),
+
+    second:
+      Number(
+        values.second
+      )
   };
 }
 
 
 function getMyanmarDate() {
-  const p = getYangonParts();
+
+  const p =
+    getYangonParts();
 
   return (
     p.year +
@@ -234,72 +382,153 @@ function getMyanmarDate() {
 }
 
 
-function getCurrentMinutes() {
-  const p = getYangonParts();
+function getCurrentSeconds() {
 
-  return p.hour * 60 + p.minute;
+  const p =
+    getYangonParts();
+
+  return (
+    p.hour * 3600 +
+    p.minute * 60 +
+    p.second
+  );
 }
 
 
-function valid2D(value) {
-  return /^[0-9]{2}$/.test(String(value || ""));
+function roundReleaseSeconds(round) {
+
+  return (
+    round.minutes *
+    60
+  );
 }
 
 
 // ============================================================
-// ADMIN SESSION
+// ADMIN TOKEN
 // ============================================================
 
-async function createSignature(value, secret) {
-  const encoder = new TextEncoder();
+async function createSignature(
+  value,
+  secret
+) {
 
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    {
-      name: "HMAC",
-      hash: "SHA-256"
-    },
-    false,
-    ["sign"]
+  const encoder =
+    new TextEncoder();
+
+  const key =
+    await crypto.subtle.importKey(
+      "raw",
+
+      encoder.encode(
+        secret
+      ),
+
+      {
+        name:
+          "HMAC",
+
+        hash:
+          "SHA-256"
+      },
+
+      false,
+
+      [
+        "sign"
+      ]
+    );
+
+
+  const signature =
+    await crypto.subtle.sign(
+      "HMAC",
+
+      key,
+
+      encoder.encode(
+        value
+      )
+    );
+
+
+  return arrayBufferToBase64Url(
+    signature
   );
-
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(value)
-  );
-
-  return arrayBufferToBase64Url(signature);
 }
 
 
-function arrayBufferToBase64Url(buffer) {
-  const bytes = new Uint8Array(buffer);
+function arrayBufferToBase64Url(
+  buffer
+) {
+
+  const bytes =
+    new Uint8Array(
+      buffer
+    );
 
   let binary = "";
 
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+  for (
+    const byte
+    of bytes
+  ) {
+    binary +=
+      String.fromCharCode(
+        byte
+      );
   }
 
   return btoa(binary)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+    .replaceAll(
+      "+",
+      "-"
+    )
+    .replaceAll(
+      "/",
+      "_"
+    )
+    .replaceAll(
+      "=",
+      ""
+    );
 }
 
 
-function getCookie(request, name) {
-  const cookie = request.headers.get("Cookie") || "";
+function getCookie(
+  request,
+  name
+) {
 
-  const pieces = cookie.split(";");
+  const cookie =
+    request.headers.get(
+      "Cookie"
+    ) || "";
 
-  for (const piece of pieces) {
-    const [key, ...rest] = piece.trim().split("=");
+  const pieces =
+    cookie.split(";");
 
-    if (key === name) {
-      return rest.join("=");
+
+  for (
+    const piece
+    of pieces
+  ) {
+
+    const [
+      key,
+      ...rest
+    ] =
+      piece
+        .trim()
+        .split("=");
+
+
+    if (
+      key === name
+    ) {
+      return rest.join(
+        "="
+      );
     }
   }
 
@@ -307,44 +536,89 @@ function getCookie(request, name) {
 }
 
 
-async function createAdminToken(secret) {
+async function createAdminToken(
+  secret
+) {
+
   const expires =
     Date.now() +
-    12 * 60 * 60 * 1000;
+    12 *
+    60 *
+    60 *
+    1000;
 
-  const data = String(expires);
+
+  const data =
+    String(
+      expires
+    );
+
 
   const signature =
-    await createSignature(data, secret);
+    await createSignature(
+      data,
+      secret
+    );
 
-  return data + "." + signature;
+
+  return (
+    data +
+    "." +
+    signature
+  );
 }
 
 
-async function isAdmin(request, env) {
-  if (!env.ADMIN_PASSWORD) {
+async function isAdmin(
+  request,
+  env
+) {
+
+  if (
+    !env.ADMIN_PASSWORD
+  ) {
     return false;
   }
 
+
   const token =
-    getCookie(request, "brazil_admin");
+    getCookie(
+      request,
+      "brazil_admin"
+    );
+
 
   if (!token) {
     return false;
   }
 
-  const pieces = token.split(".");
 
-  if (pieces.length !== 2) {
+  const pieces =
+    token.split(".");
+
+
+  if (
+    pieces.length !==
+    2
+  ) {
     return false;
   }
 
-  const expires = pieces[0];
-  const signature = pieces[1];
 
-  if (Number(expires) < Date.now()) {
+  const expires =
+    pieces[0];
+
+  const signature =
+    pieces[1];
+
+
+  if (
+    Number(expires) <
+    Date.now()
+  ) {
     return false;
   }
+
 
   const expected =
     await createSignature(
@@ -352,174 +626,554 @@ async function isAdmin(request, env) {
       env.ADMIN_PASSWORD
     );
 
-  return signature === expected;
+
+  return (
+    signature ===
+    expected
+  );
 }
 
 
-async function adminLogin(request, env) {
-  const form = await request.formData();
+async function adminLogin(
+  request,
+  env
+) {
+
+  const form =
+    await request.formData();
+
 
   const password =
-    String(form.get("password") || "");
+    String(
+      form.get(
+        "password"
+      ) || ""
+    );
+
 
   if (
     !env.ADMIN_PASSWORD ||
-    password !== env.ADMIN_PASSWORD
+    password !==
+      env.ADMIN_PASSWORD
   ) {
+
     return html(
-      adminLoginPage("Wrong password."),
+      adminLoginPage(
+        "Wrong password."
+      ),
       401
     );
   }
+
 
   const token =
     await createAdminToken(
       env.ADMIN_PASSWORD
     );
 
-  return new Response(null, {
-    status: 303,
-    headers: {
-      Location:
-        new URL(
-          "/admin",
-          request.url
-        ).toString(),
 
-      "Set-Cookie":
-        "brazil_admin=" +
-        token +
-        "; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict"
+  return new Response(
+    null,
+    {
+      status: 303,
+
+      headers: {
+
+        Location:
+          new URL(
+            "/admin",
+            request.url
+          ).toString(),
+
+        "Set-Cookie":
+          "brazil_admin=" +
+          token +
+          "; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Strict"
+      }
     }
-  });
+  );
 }
 
 
 // ============================================================
-// LIVE DATA API
+// LIVE MARKET API
+//
+// SET   = BTC volume
+// VALUE = BTC price
 // ============================================================
 
-async function getLiveData(DB) {
+async function fetchLiveMarket() {
+
+  const endpoint =
+    "https://api.exchange.coinbase.com/products/BTC-USD/ticker";
+
+
+  try {
+
+    const cache =
+      caches.default;
+
+
+    const cacheKey =
+      new Request(
+        "https://brazil2d.local/cache/btc-usd-ticker"
+      );
+
+
+    let response =
+      await cache.match(
+        cacheKey
+      );
+
+
+    if (!response) {
+
+      const upstream =
+        await fetch(
+          endpoint,
+          {
+            headers: {
+              Accept:
+                "application/json",
+
+              "User-Agent":
+                "Brazil-2D/1.0"
+            }
+          }
+        );
+
+
+      if (
+        !upstream.ok
+      ) {
+        throw new Error(
+          "Market API HTTP " +
+          upstream.status
+        );
+      }
+
+
+      const data =
+        await upstream.json();
+
+
+      response =
+        new Response(
+          JSON.stringify(
+            data
+          ),
+          {
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              "Cache-Control":
+                "public, max-age=10"
+            }
+          }
+        );
+
+
+      await cache.put(
+        cacheKey,
+        response.clone()
+      );
+    }
+
+
+    const data =
+      await response.json();
+
+
+    const price =
+      Number(
+        data.price
+      );
+
+
+    const volume =
+      Number(
+        data.volume
+      );
+
+
+    return {
+
+      ok:
+        Number.isFinite(
+          price
+        ) &&
+        Number.isFinite(
+          volume
+        ),
+
+      set:
+        Number.isFinite(
+          volume
+        )
+          ? volume.toFixed(
+              2
+            )
+          : "--",
+
+      value:
+        Number.isFinite(
+          price
+        )
+          ? price.toFixed(
+              2
+            )
+          : "--",
+
+      source:
+        "Coinbase BTC-USD",
+
+      fetched_at:
+        new Date()
+          .toISOString()
+    };
+
+  } catch (error) {
+
+    console.error(
+      "Market API error",
+      error
+    );
+
+
+    return {
+      ok: false,
+      set: "--",
+      value: "--",
+      source:
+        "Coinbase BTC-USD"
+    };
+  }
+}
+
+
+// ============================================================
+// DATABASE DATA
+// ============================================================
+
+async function queryTodayResults(
+  DB
+) {
+
   const today =
     getMyanmarDate();
 
-  const currentMinutes =
-    getCurrentMinutes();
 
   const query =
     await DB.prepare(`
       SELECT
+        result_date,
         round_time,
         result,
         set_value,
         market_value
+
       FROM results
-      WHERE result_date = ?
+
+      WHERE
+        result_date = ?
     `)
     .bind(today)
     .all();
 
+
+  return (
+    query.results ||
+    []
+  );
+}
+
+
+// ============================================================
+// LIVE STATE
+// ============================================================
+
+async function getLiveState(
+  DB
+) {
+
+  const today =
+    getMyanmarDate();
+
+
+  const nowSeconds =
+    getCurrentSeconds();
+
+
   const rows =
-    query.results || [];
+    await queryTodayResults(
+      DB
+    );
 
-  const map = {};
 
-  let setValue = "--";
-  let marketValue = "--";
+  const map =
+    new Map(
+      rows.map(
+        row => [
+          row.round_time,
+          row
+        ]
+      )
+    );
 
-  for (const row of rows) {
-    map[row.round_time] = row;
 
-    if (row.set_value) {
-      setValue = row.set_value;
-    }
+  const market =
+    await fetchLiveMarket();
 
-    if (row.market_value) {
-      marketValue = row.market_value;
-    }
-  }
 
-  const releasedResults = {};
+  const releasedResults =
+    {};
 
-  let liveResult = "--";
-  let activeRound = null;
-  let nextRound = null;
 
-  for (const round of ROUNDS) {
-    const row = map[round.time];
+  let latestReleased =
+    null;
 
-    if (currentMinutes >= round.minutes) {
+
+  for (
+    const round
+    of ROUNDS
+  ) {
+
+    const release =
+      roundReleaseSeconds(
+        round
+      );
+
+
+    const row =
+      map.get(
+        round.time
+      );
+
+
+    if (
+      nowSeconds >=
+      release
+    ) {
 
       if (
         row &&
-        valid2D(row.result)
+        valid2D(
+          row.result
+        )
       ) {
-        releasedResults[round.id] =
+
+        releasedResults[
+          round.id
+        ] =
           row.result;
 
-        liveResult =
-          row.result;
 
-        activeRound =
-          round.time;
+        latestReleased = {
+          round,
+          row
+        };
+
       } else {
-        releasedResults[round.id] =
+
+        releasedResults[
+          round.id
+        ] =
           "--";
       }
 
     } else {
 
-      releasedResults[round.id] =
+      releasedResults[
+        round.id
+      ] =
         "--";
-
-      if (!nextRound) {
-        nextRound =
-          round.time;
-      }
     }
   }
 
+
+  // ========================================================
+  // 3 MINUTE FINAL HOLD
+  // ========================================================
+
+  let resultHold =
+    null;
+
+
+  for (
+    let i =
+      ROUNDS.length - 1;
+
+    i >= 0;
+
+    i--
+  ) {
+
+    const round =
+      ROUNDS[i];
+
+
+    const release =
+      roundReleaseSeconds(
+        round
+      );
+
+
+    const elapsed =
+      nowSeconds -
+      release;
+
+
+    if (
+      elapsed >= 0 &&
+      elapsed <
+        RESULT_HOLD_SECONDS
+    ) {
+
+      const row =
+        map.get(
+          round.time
+        );
+
+
+      if (
+        row &&
+        valid2D(
+          row.result
+        )
+      ) {
+
+        resultHold = {
+
+          active:
+            true,
+
+          round_time:
+            round.time,
+
+          result:
+            row.result,
+
+          elapsed_seconds:
+            elapsed,
+
+          seconds_remaining:
+            RESULT_HOLD_SECONDS -
+            elapsed,
+
+          set:
+            row.set_value ||
+            market.set,
+
+          value:
+            row.market_value ||
+            market.value
+        };
+      }
+
+      break;
+    }
+  }
+
+
+  // ========================================================
+  // NEXT ROUND
+  // ========================================================
+
+  let nextRound =
+    null;
+
+
+  for (
+    const round
+    of ROUNDS
+  ) {
+
+    const release =
+      roundReleaseSeconds(
+        round
+      );
+
+
+    if (
+      nowSeconds <
+      release
+    ) {
+
+      nextRound = {
+
+        round_time:
+          round.time,
+
+        seconds_until:
+          release -
+          nowSeconds
+      };
+
+      break;
+    }
+  }
+
+
   return {
-    date: today,
 
-    result: liveResult,
+    success:
+      true,
 
-    round_time: activeRound,
+    date:
+      today,
 
-    next_round: nextRound,
+    serverNow:
+      Date.now(),
 
-    set: setValue,
+    market,
 
-    value: marketValue,
+    resultHold,
 
-    results: releasedResults,
+    nextRound,
 
-    server_minutes:
-      currentMinutes
+    latest_result:
+      latestReleased
+        ? latestReleased.row.result
+        : "--",
+
+    latest_round:
+      latestReleased
+        ? latestReleased.round.time
+        : null,
+
+    results:
+      releasedResults
   };
 }
 
 
 // ============================================================
-// MAIN USER PAGE
+// USER PAGE
 // ============================================================
 
-async function mainPage(DB) {
-  const data =
-    await getLiveData(DB);
+async function mainPage(
+  DB
+) {
 
-  let firstDigit = "";
-  let secondDigit = "";
+  const state =
+    await getLiveState(
+      DB
+    );
 
-  if (valid2D(data.result)) {
-    firstDigit =
-      data.result.charAt(0);
 
-    secondDigit =
-      data.result.charAt(1);
-  }
+  const hold =
+    state.resultHold;
+
+
+  const initialResult =
+    hold?.active
+      ? hold.result
+      : "--";
+
 
   return `<!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -527,141 +1181,127 @@ async function mainPage(DB) {
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 
 <title>Brazil 2D</title>
 
 <style>
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
 }
 
 html,
-body {
-  width: 100%;
-  min-height: 100%;
-  background: #ffffff;
-  font-family: Arial, Helvetica, sans-serif;
+body{
+  width:100%;
+  min-height:100%;
+  background:#fff;
+  font-family:Arial,Helvetica,sans-serif;
 }
 
-body {
-  color: #111;
+body{
+  color:#111;
 }
 
-.app {
-  width: 100%;
-  max-width: 480px;
-  min-height: 100dvh;
-  margin: 0 auto;
-  background: #fff;
-  overflow: hidden;
+.app{
+  width:100%;
+  max-width:480px;
+  min-height:100dvh;
+  margin:0 auto;
+  background:#fff;
+  overflow:hidden;
 }
 
 
-/* ========================================================
-   TOP
-======================================================== */
+/* ==========================================
+   HEADER
+========================================== */
 
-.live-header {
-  height: 58px;
+.live-header{
+  height:58px;
+  padding:8px 18px;
 
-  padding:
-    8px
-    18px;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content:
-    space-between;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
 }
 
-.brand {
-  font-size: 22px;
-  font-weight: 900;
-  font-style: italic;
-  white-space: nowrap;
+.brand{
+  font-size:22px;
+  font-weight:900;
+  font-style:italic;
+  white-space:nowrap;
 }
 
-.brand-brazil {
-  color: #109447;
+.brand-brazil{
+  color:#109447;
 }
 
-.brand-2 {
-  color: #0864ac;
+.brand-2{
+  color:#0864ac;
 }
 
-.brand-d {
-  color: #f4be00;
+.brand-d{
+  color:#f4be00;
 }
 
-.live-pill {
-  background: #e2f5e9;
+.live-pill{
+  background:#e2f5e9;
+  color:#078f40;
 
-  color: #078f40;
+  padding:9px 12px;
 
-  padding:
-    9px
-    12px;
+  border-radius:26px;
 
-  border-radius: 26px;
+  font-size:11px;
+  font-weight:900;
 
-  font-size: 11px;
-
-  font-weight: 900;
-
-  white-space: nowrap;
+  white-space:nowrap;
 }
 
-.live-dot {
-  display: inline-block;
+.live-dot{
+  display:inline-block;
 
-  width: 10px;
-  height: 10px;
+  width:10px;
+  height:10px;
 
-  background: #08a34b;
+  background:#08a34b;
 
-  border-radius: 50%;
+  border-radius:50%;
 
-  margin-right: 6px;
+  margin-right:6px;
 
-  vertical-align: -1px;
+  vertical-align:-1px;
 
-  animation:
-    pulse
-    1.3s
-    infinite;
+  animation:pulse 1.3s infinite;
 }
 
-@keyframes pulse {
+@keyframes pulse{
 
-  0%,
-  100% {
-    opacity: 1;
+  0%,100%{
+    opacity:1;
   }
 
-  50% {
-    opacity: .35;
+  50%{
+    opacity:.35;
   }
 }
 
 
-/* ========================================================
+/* ==========================================
    HERO
-======================================================== */
+========================================== */
 
-.hero {
-  position: relative;
+.hero{
+  position:relative;
 
-  height: 215px;
+  height:215px;
 
-  text-align: center;
+  text-align:center;
 
-  overflow: hidden;
+  overflow:hidden;
 
   background:
     radial-gradient(
@@ -674,19 +1314,19 @@ body {
       rgba(16,148,71,.08),
       transparent 22%
     ),
-    #ffffff;
+    #fff;
 }
 
-.hero::after {
-  content: "";
+.hero::after{
+  content:"";
 
-  position: absolute;
+  position:absolute;
 
-  left: -8%;
-  right: -8%;
-  bottom: 0;
+  left:-8%;
+  right:-8%;
+  bottom:0;
 
-  height: 56px;
+  height:56px;
 
   background:
     linear-gradient(
@@ -697,390 +1337,351 @@ body {
       rgba(16,101,179,.55) 66% 100%
     );
 
-  z-index: 0;
+  z-index:0;
 }
 
-.hero-content {
-  height: 100%;
+.hero-content{
+  height:100%;
 
-  position: relative;
+  position:relative;
 
-  z-index: 2;
+  z-index:2;
 
-  display: flex;
+  display:flex;
 
-  flex-direction: column;
+  flex-direction:column;
 
-  align-items: center;
+  align-items:center;
 
-  justify-content: center;
+  justify-content:center;
 
-  padding-bottom: 36px;
-}
-
-
-/* ========================================================
-   BIG LIVE RESULT
-======================================================== */
-
-.live-result-box {
-  width: 100%;
-
-  height: 126px;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  position: relative;
+  padding-bottom:36px;
 }
 
 
-.result-digits {
-  display: flex;
+/* ==========================================
+   BIG RESULT
+========================================== */
 
-  align-items: center;
+.live-result-box{
+  width:100%;
+  height:126px;
 
-  justify-content: center;
+  position:relative;
 
-  line-height: .86;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 
-  transition:
-    opacity .20s ease,
-    transform .20s ease;
+.result-digits{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  line-height:.86;
+}
+
+.digit{
+  font-size:clamp(
+    110px,
+    31vw,
+    148px
+  );
+
+  font-weight:900;
+
+  letter-spacing:-8px;
+}
+
+.digit-one{
+  color:#109447;
+}
+
+.digit-two{
+  color:#ffc400;
+}
+
+.no-result{
+  color:#111;
+
+  font-size:64px;
+
+  font-weight:900;
 }
 
 
-.result-digits.hide {
-  opacity: 0;
+/* ==========================================
+   LIVE CHANGE ANIMATION
+========================================== */
 
-  transform:
-    scale(.82);
+.live-change{
+  animation:
+    liveBlink
+    .82s
+    ease-in-out
+    1;
+}
+
+@keyframes liveBlink{
+
+  0%,100%{
+    opacity:1;
+    transform:scale(1);
+  }
+
+  45%{
+    opacity:.20;
+    transform:scale(.96);
+  }
+
+  65%{
+    opacity:1;
+    transform:scale(1.025);
+  }
 }
 
 
-.digit {
-  font-size:
-    clamp(
-      108px,
-      31vw,
-      148px
-    );
+/* ==========================================
+   FINAL RESULT RING
+========================================== */
 
-  font-weight: 900;
+.result-loader{
+  display:none;
 
-  letter-spacing: -8px;
-}
+  position:absolute;
 
+  width:72px;
+  height:72px;
 
-.digit-one {
-  color: #109447;
-}
-
-
-.digit-two {
-  color: #ffc400;
-}
-
-
-/* NO RESULT */
-
-.no-result {
-  display: none;
-
-  color: #111;
-
-  font-size: 70px;
-
-  font-weight: 900;
-
-  line-height: 1;
-}
-
-
-.no-result.show {
-  display: block;
-}
-
-
-/* BLUE + PURPLE LOADER */
-
-.result-loader {
-  display: none;
-
-  position: absolute;
-
-  width: 72px;
-  height: 72px;
-
-  border-radius: 50%;
+  border-radius:50%;
 
   border:
     7px solid
-    rgba(72,73,190,.12);
+    rgba(70,70,200,.12);
 
   border-top-color:
     #315fd4;
 
   border-right-color:
-    #8c42db;
+    #8b42db;
 
   border-bottom-color:
-    #445fe0;
+    #315fd4;
 
   animation:
     resultSpin
-    .68s
+    .70s
     linear
     infinite;
 }
 
-
-.result-loader.show {
-  display: block;
+.result-loader.show{
+  display:block;
 }
 
+@keyframes resultSpin{
 
-@keyframes resultSpin {
-
-  from {
-    transform:
-      rotate(0deg);
+  from{
+    transform:rotate(0deg);
   }
 
-  to {
-    transform:
-      rotate(360deg);
+  to{
+    transform:rotate(360deg);
   }
 }
 
 
-.date-time {
-  color: #075ea8;
+.date-time{
+  color:#075ea8;
 
-  font-size: 15px;
+  font-size:15px;
 
-  font-weight: 900;
+  font-weight:900;
 
-  white-space: nowrap;
+  white-space:nowrap;
 }
 
 
-/* ========================================================
-   SET + VALUE
-======================================================== */
+/* ==========================================
+   SET / VALUE
+========================================== */
 
-.value-card {
-  position: relative;
+.value-card{
+  position:relative;
 
-  z-index: 5;
+  z-index:5;
 
-  width:
-    calc(100% - 36px);
+  width:calc(100% - 36px);
 
-  height: 76px;
+  height:76px;
 
-  margin:
-    -28px
-    auto
-    12px;
+  margin:-28px auto 12px;
 
-  background: #fff;
+  background:#fff;
 
-  border-radius: 20px;
+  border-radius:20px;
 
   box-shadow:
-    0
-    5px
-    16px
+    0 5px 16px
     rgba(0,0,0,.12);
 
-  display: flex;
+  display:flex;
 
-  align-items: center;
+  align-items:center;
 
-  padding: 8px;
+  padding:8px;
 }
 
+.value-item{
+  width:50%;
 
-.value-item {
-  width: 50%;
+  text-align:center;
 
-  text-align: center;
-
-  padding:
-    2px
-    8px;
+  padding:2px 8px;
 }
 
-
-.value-item:first-child {
+.value-item:first-child{
   border-right:
-    1px
-    solid
+    1px solid
     #e4e4e4;
 }
 
+.value-label{
+  color:#0b9347;
 
-.value-label {
-  color: #0b9347;
+  font-size:12px;
 
-  font-size: 12px;
+  font-weight:900;
 
-  font-weight: 900;
+  margin-bottom:5px;
+}
 
-  margin-bottom: 5px;
+.value-number{
+  color:#050505;
+
+  font-size:21px;
+
+  font-weight:900;
+
+  white-space:nowrap;
 }
 
 
-.value-number {
-  color: #050505;
+/* ==========================================
+   ROUND CARDS
+========================================== */
 
-  font-size: 21px;
+.round-grid{
+  padding:0 18px;
 
-  font-weight: 900;
-
-  white-space: nowrap;
-}
-
-
-/* ========================================================
-   6 ROUND CARDS
-======================================================== */
-
-.round-grid {
-  padding:
-    0
-    18px;
-
-  display: grid;
+  display:grid;
 
   grid-template-columns:
-    repeat(2, 1fr);
+    repeat(2,1fr);
 
-  gap:
-    8px
-    10px;
+  gap:8px 10px;
+}
+
+.round{
+  height:73px;
+
+  border:2px solid;
+
+  border-radius:15px;
+
+  background:#fff;
+
+  display:flex;
+
+  flex-direction:column;
+
+  align-items:center;
+
+  justify-content:center;
+}
+
+.round.green{
+  border-color:#16984d;
+}
+
+.round.yellow{
+  border-color:#e8c327;
+}
+
+.round.blue{
+  border-color:#176caf;
+}
+
+.round-time{
+  font-size:12px;
+
+  font-weight:900;
+
+  margin-bottom:4px;
+}
+
+.round.green .round-time{
+  color:#109447;
+}
+
+.round.yellow .round-time{
+  color:#e8b900;
+}
+
+.round.blue .round-time{
+  color:#0762a9;
+}
+
+.round-number{
+  color:#0a0a0a;
+
+  font-size:29px;
+
+  line-height:1;
+
+  font-weight:900;
 }
 
 
-.round {
-  height: 73px;
-
-  border:
-    2px
-    solid;
-
-  border-radius: 15px;
-
-  background: #fff;
-
-  display: flex;
-
-  flex-direction: column;
-
-  align-items: center;
-
-  justify-content: center;
-}
-
-
-.round.green {
-  border-color: #16984d;
-}
-
-
-.round.yellow {
-  border-color: #e8c327;
-}
-
-
-.round.blue {
-  border-color: #176caf;
-}
-
-
-.round-time {
-  font-size: 12px;
-
-  font-weight: 900;
-
-  margin-bottom: 4px;
-}
-
-
-.round.green .round-time {
-  color: #109447;
-}
-
-
-.round.yellow .round-time {
-  color: #e8b900;
-}
-
-
-.round.blue .round-time {
-  color: #0762a9;
-}
-
-
-.round-number {
-  color: #0a0a0a;
-
-  font-size: 29px;
-
-  line-height: 1;
-
-  font-weight: 900;
-}
-
-
-/* ========================================================
+/* ==========================================
    HISTORY
-======================================================== */
+========================================== */
 
-.bottom {
-  padding:
-    11px
-    18px
-    38px;
+.bottom{
+  padding:11px 18px 38px;
 
-  position: relative;
+  position:relative;
 }
 
+.history-btn{
+  width:100%;
 
-.history-btn {
-  width: 100%;
-
-  height: 48px;
+  height:48px;
 
   border:
-    2px
-    solid
+    2px solid
     #15994c;
 
-  border-radius: 28px;
+  border-radius:28px;
 
-  background: #fff;
+  background:#fff;
 
-  color: #129448;
+  color:#129448;
 
-  font-size: 17px;
+  font-size:17px;
 
-  font-weight: 900;
+  font-weight:900;
 }
 
+.bottom-wave{
+  position:absolute;
 
-.bottom-wave {
-  position: absolute;
+  left:-5%;
+  right:-5%;
+  bottom:0;
 
-  left: -5%;
-  right: -5%;
-  bottom: 0;
-
-  height: 27px;
+  height:27px;
 
   background:
     linear-gradient(
@@ -1092,40 +1693,38 @@ body {
 }
 
 
-/* SMALL PHONE */
+@media(max-height:700px){
 
-@media (max-height: 700px) {
-
-  .live-header {
-    height: 52px;
+  .live-header{
+    height:52px;
   }
 
-  .hero {
-    height: 188px;
+  .hero{
+    height:188px;
   }
 
-  .live-result-box {
-    height: 106px;
+  .live-result-box{
+    height:106px;
   }
 
-  .digit {
-    font-size: 102px;
+  .digit{
+    font-size:102px;
   }
 
-  .value-card {
-    height: 68px;
+  .value-card{
+    height:68px;
   }
 
-  .round {
-    height: 65px;
+  .round{
+    height:65px;
   }
 
-  .round-number {
-    font-size: 26px;
+  .round-number{
+    font-size:26px;
   }
 
-  .history-btn {
-    height: 43px;
+  .history-btn{
+    height:43px;
   }
 }
 
@@ -1171,69 +1770,81 @@ body {
 
 <section class="hero">
 
-  <div class="hero-content">
+<div class="hero-content">
 
 
-    <div class="live-result-box">
+<div
+  class="live-result-box"
+  id="liveResultBox"
+>
 
 
-      <div
-        class="result-digits"
-        id="resultDigits"
-        style="${
-          valid2D(data.result)
-            ? ""
-            : "display:none;"
-        }"
-      >
+  <div
+    class="result-digits"
+    id="resultDigits"
+    ${
+      valid2D(initialResult)
+        ? ""
+        : 'style="display:none;"'
+    }
+  >
 
-        <span
-          class="digit digit-one"
-          id="digit1"
-        >
-          ${escapeHtml(firstDigit)}
-        </span>
-
-        <span
-          class="digit digit-two"
-          id="digit2"
-        >
-          ${escapeHtml(secondDigit)}
-        </span>
-
-      </div>
-
-
-      <div
-        class="no-result ${
-          valid2D(data.result)
-            ? ""
-            : "show"
-        }"
-        id="noResult"
-      >
-        --
-      </div>
-
-
-      <div
-        class="result-loader"
-        id="resultLoader"
-      ></div>
-
-
-    </div>
-
-
-    <div
-      class="date-time"
-      id="dateTime"
+    <span
+      class="digit digit-one"
+      id="digit1"
     >
-      --/--/---- | --:--:-- --
-    </div>
+      ${
+        valid2D(initialResult)
+          ? initialResult.charAt(0)
+          : ""
+      }
+    </span>
 
+    <span
+      class="digit digit-two"
+      id="digit2"
+    >
+      ${
+        valid2D(initialResult)
+          ? initialResult.charAt(1)
+          : ""
+      }
+    </span>
 
   </div>
+
+
+  <div
+    class="no-result"
+    id="noResult"
+    ${
+      valid2D(initialResult)
+        ? 'style="display:none;"'
+        : ""
+    }
+  >
+    --
+  </div>
+
+
+  <div
+    class="result-loader"
+    id="resultLoader"
+  ></div>
+
+
+</div>
+
+
+<div
+  class="date-time"
+  id="dateTime"
+>
+--/--/---- | --:--:-- --
+</div>
+
+
+</div>
 
 </section>
 
@@ -1241,44 +1852,48 @@ body {
 <section class="value-card">
 
 
-  <div class="value-item">
+<div class="value-item">
 
-    <div class="value-label">
-      SET
-    </div>
-
-    <div
-      class="value-number"
-      id="setValue"
-    >
-      ${
-        data.set !== "--"
-          ? escapeHtml(data.set)
-          : "--"
-      }
-    </div>
-
+  <div class="value-label">
+    SET
   </div>
 
-
-  <div class="value-item">
-
-    <div class="value-label">
-      VALUE
-    </div>
-
-    <div
-      class="value-number"
-      id="marketValue"
-    >
-      ${
-        data.value !== "--"
-          ? escapeHtml(data.value)
-          : "--"
-      }
-    </div>
-
+  <div
+    class="value-number"
+    id="setValue"
+  >
+    ${
+      hold?.active
+        ? escapeHtml(
+            hold.set
+          )
+        : "--"
+    }
   </div>
+
+</div>
+
+
+<div class="value-item">
+
+  <div class="value-label">
+    VALUE
+  </div>
+
+  <div
+    class="value-number"
+    id="valueValue"
+  >
+    ${
+      hold?.active
+        ? escapeHtml(
+            hold.value
+          )
+        : "--"
+    }
+  </div>
+
+</div>
 
 
 </section>
@@ -1300,7 +1915,9 @@ ${ROUNDS.map(round => `
     id="${round.id}"
   >
     ${escapeHtml(
-      data.results[round.id] || "--"
+      state.results[
+        round.id
+      ] || "--"
     )}
   </div>
 
@@ -1314,14 +1931,14 @@ ${ROUNDS.map(round => `
 
 <section class="bottom">
 
-  <button
-    class="history-btn"
-    onclick="window.location.href='/history'"
-  >
-    2D HISTORY
-  </button>
+<button
+  class="history-btn"
+  onclick="window.location.href='/history'"
+>
+2D HISTORY
+</button>
 
-  <div class="bottom-wave"></div>
+<div class="bottom-wave"></div>
 
 </section>
 
@@ -1331,355 +1948,89 @@ ${ROUNDS.map(round => `
 
 <script>
 
-/* ==========================================================
-   CURRENT FINAL ROUND
+// ============================================================
+// LIVE FRONTEND
+// ============================================================
 
-   IMPORTANT:
-   Compare ROUND TIME too.
-   So if same number repeats on next round,
-   animation still runs.
-========================================================== */
+const MARKET_JUMP_MS =
+  10000;
 
-let currentFinalRound =
-  ${JSON.stringify(data.round_time || null)};
-
-let currentFinalResult =
-  ${JSON.stringify(data.result || "--")};
+const BLINK_INTERVAL_MS =
+  3500;
 
 
-let playingTimer = null;
+let serverBase =
+  ${Number(
+    state.serverNow
+  )};
 
-let animationBusy = false;
+let perfBase =
+  performance.now();
 
-let holdFinal = false;
+
+let marketBase =
+  null;
 
 
-/* ==========================================================
-   RANDOM LIVE DISPLAY
-========================================================== */
+let marketJumpIndex =
+  0;
 
-function random2D() {
 
-  return String(
-    Math.floor(
-      Math.random() * 100
+let marketJumpTimer =
+  null;
+
+
+let blinkTimer =
+  null;
+
+
+let apiTimer =
+  null;
+
+
+let holdActive =
+  ${
+    hold?.active
+      ? "true"
+      : "false"
+  };
+
+
+let activeHoldRound =
+  ${
+    JSON.stringify(
+      hold?.round_time ||
+      null
     )
-  ).padStart(2, "0");
-}
+  };
 
 
-function randomSet() {
+let ringBusy =
+  false;
 
-  const value =
-    2000 +
-    Math.random() * 150;
 
-  return value.toFixed(2);
-}
+// ============================================================
+// CLOCK
+// ============================================================
 
+function estimatedServerNow(){
 
-function randomMarketValue() {
-
-  const value =
-    68000 +
-    Math.random() * 2000;
-
-  return value.toFixed(2);
-}
-
-
-/* ==========================================================
-   BIG RESULT DISPLAY
-========================================================== */
-
-function showBigNumber(number) {
-
-  if (
-    !number ||
-    number.length !== 2
-  ) {
-    return;
-  }
-
-  const digits =
-    document.getElementById(
-      "resultDigits"
-    );
-
-  const noResult =
-    document.getElementById(
-      "noResult"
-    );
-
-  noResult.classList.remove(
-    "show"
-  );
-
-  digits.style.display =
-    "flex";
-
-  document
-    .getElementById("digit1")
-    .textContent =
-      number.charAt(0);
-
-  document
-    .getElementById("digit2")
-    .textContent =
-      number.charAt(1);
-}
-
-
-/* ==========================================================
-   START LIVE PLAY
-========================================================== */
-
-function startLivePlay() {
-
-  if (playingTimer) {
-    return;
-  }
-
-  holdFinal =
-    false;
-
-
-  playingTimer =
-    setInterval(
-      function() {
-
-        if (
-          animationBusy ||
-          holdFinal
-        ) {
-          return;
-        }
-
-
-        const randomResult =
-          random2D();
-
-
-        showBigNumber(
-          randomResult
-        );
-
-
-        document
-          .getElementById(
-            "setValue"
-          )
-          .textContent =
-            randomSet();
-
-
-        document
-          .getElementById(
-            "marketValue"
-          )
-          .textContent =
-            randomMarketValue();
-
-      },
-      180
-    );
-}
-
-
-/* ==========================================================
-   STOP PLAY
-========================================================== */
-
-function stopLivePlay() {
-
-  if (playingTimer) {
-
-    clearInterval(
-      playingTimer
-    );
-
-    playingTimer =
-      null;
-  }
-}
-
-
-/* ==========================================================
-   FINAL RESULT ANIMATION
-
-   PLAY -> NUMBER DISAPPEARS
-        -> RING
-        -> ADMIN FINAL RESULT
-========================================================== */
-
-function showFinalResult(
-  result,
-  setValue,
-  marketValue,
-  roundTime
-) {
-
-  if (
-    animationBusy ||
-    !result ||
-    result.length !== 2
-  ) {
-    return;
-  }
-
-
-  animationBusy =
-    true;
-
-  holdFinal =
-    true;
-
-  stopLivePlay();
-
-
-  const digits =
-    document.getElementById(
-      "resultDigits"
-    );
-
-  const noResult =
-    document.getElementById(
-      "noResult"
-    );
-
-  const loader =
-    document.getElementById(
-      "resultLoader"
-    );
-
-
-  noResult.classList.remove(
-    "show"
-  );
-
-
-  digits.classList.add(
-    "hide"
-  );
-
-
-  /* OLD NUMBER DISAPPEARS */
-
-  setTimeout(
-    function() {
-
-      digits.style.display =
-        "none";
-
-      loader.classList.add(
-        "show"
-      );
-
-    },
-    200
-  );
-
-
-  /* RING SPINS THEN FINAL APPEARS */
-
-  setTimeout(
-    function() {
-
-      loader.classList.remove(
-        "show"
-      );
-
-
-      document
-        .getElementById("digit1")
-        .textContent =
-          result.charAt(0);
-
-
-      document
-        .getElementById("digit2")
-        .textContent =
-          result.charAt(1);
-
-
-      digits.style.display =
-        "flex";
-
-
-      requestAnimationFrame(
-        function() {
-
-          digits.classList.remove(
-            "hide"
-          );
-
-        }
-      );
-
-
-      /* FINAL SET */
-
-      document
-        .getElementById(
-          "setValue"
-        )
-        .textContent =
-          setValue || "--";
-
-
-      /* FINAL VALUE */
-
-      document
-        .getElementById(
-          "marketValue"
-        )
-        .textContent =
-          marketValue || "--";
-
-
-      currentFinalResult =
-        result;
-
-
-      currentFinalRound =
-        roundTime;
-
-
-      animationBusy =
-        false;
-
-
-      /*
-       * FINAL result ကို ခဏပြထားပြီး
-       * နောက် Round အတွက် Live ကစားပြန်မယ်
-       */
-
-      setTimeout(
-        function() {
-
-          holdFinal =
-            false;
-
-          startLivePlay();
-
-        },
-        3500
-      );
-
-    },
-    1250
+  return (
+    serverBase +
+    (
+      performance.now() -
+      perfBase
+    )
   );
 }
 
 
-/* ==========================================================
-   CLOCK
-========================================================== */
-
-function updateClock() {
+function updateClock(){
 
   const now =
-    new Date();
+    new Date(
+      estimatedServerNow()
+    );
 
 
   const date =
@@ -1734,20 +2085,791 @@ function updateClock() {
 }
 
 
-updateClock();
-
-
 setInterval(
   updateClock,
   1000
 );
 
 
-/* ==========================================================
-   LIVE API CHECK
-========================================================== */
+updateClock();
 
-async function checkLiveAPI() {
+
+// ============================================================
+// LIVE SET / VALUE JUMP
+// ============================================================
+
+function format2(value){
+
+  return Number(
+    value
+  ).toFixed(2);
+}
+
+
+function makeJumpMarket(
+  base,
+  index
+){
+
+  if (
+    !base ||
+    !base.ok
+  ) {
+
+    return {
+      ok:false,
+      set:"--",
+      value:"--"
+    };
+  }
+
+
+  const baseSet =
+    Number(
+      base.set
+    );
+
+
+  const baseValue =
+    Number(
+      base.value
+    );
+
+
+  if (
+    !Number.isFinite(
+      baseSet
+    ) ||
+    !Number.isFinite(
+      baseValue
+    )
+  ) {
+
+    return {
+      ok:false,
+      set:"--",
+      value:"--"
+    };
+  }
+
+
+  // SET movement
+  const setSteps = [
+    0,
+    -297.98,
+    -275.79,
+    126.24,
+    -143.67,
+    218.31,
+    -84.52,
+    341.16
+  ];
+
+
+  // VALUE movement
+  const valueSteps = [
+    0,
+    0.03,
+    0.06,
+    0.02,
+    0.08,
+    0.05,
+    0.11,
+    0.07
+  ];
+
+
+  const nextSet =
+    Math.max(
+      0,
+      baseSet +
+      setSteps[
+        index %
+        setSteps.length
+      ]
+    );
+
+
+  const nextValue =
+    baseValue +
+    valueSteps[
+      index %
+      valueSteps.length
+    ];
+
+
+  return {
+
+    ok:true,
+
+    set:
+      format2(
+        nextSet
+      ),
+
+    value:
+      format2(
+        nextValue
+      )
+  };
+}
+
+
+// ============================================================
+// CALCULATE LIVE 2D
+//
+// SET = last digit
+// VALUE = integer part last digit
+// ============================================================
+
+function calculate2D(
+  setValue,
+  valueValue
+){
+
+  const setText =
+    String(
+      setValue || ""
+    ).trim();
+
+
+  const valueText =
+    String(
+      valueValue || ""
+    ).trim();
+
+
+  const setDigits =
+    setText.replace(
+      /\\D/g,
+      ""
+    );
+
+
+  if (!setDigits) {
+    return null;
+  }
+
+
+  const setDigit =
+    setDigits.slice(-1);
+
+
+  const valueInteger =
+    valueText
+      .split(".")[0]
+      .replace(
+        /\\D/g,
+        ""
+      );
+
+
+  if (!valueInteger) {
+    return null;
+  }
+
+
+  const valueDigit =
+    valueInteger.slice(-1);
+
+
+  return (
+    setDigit +
+    valueDigit
+  );
+}
+
+
+// ============================================================
+// SHOW BIG 2D
+// ============================================================
+
+function showBig2D(
+  result
+){
+
+  if (
+    !/^\\d{2}$/.test(
+      result || ""
+    )
+  ) {
+    return;
+  }
+
+
+  const digits =
+    document.getElementById(
+      "resultDigits"
+    );
+
+
+  const noResult =
+    document.getElementById(
+      "noResult"
+    );
+
+
+  noResult.style.display =
+    "none";
+
+
+  digits.style.display =
+    "flex";
+
+
+  document
+    .getElementById(
+      "digit1"
+    )
+    .textContent =
+      result.charAt(0);
+
+
+  document
+    .getElementById(
+      "digit2"
+    )
+    .textContent =
+      result.charAt(1);
+}
+
+
+// ============================================================
+// PAINT LIVE FRAME
+// ============================================================
+
+function paintLiveMarket(){
+
+  if (
+    holdActive ||
+    !marketBase ||
+    !marketBase.ok
+  ) {
+    return;
+  }
+
+
+  const live =
+    makeJumpMarket(
+      marketBase,
+      marketJumpIndex
+    );
+
+
+  if (!live.ok) {
+    return;
+  }
+
+
+  document
+    .getElementById(
+      "setValue"
+    )
+    .textContent =
+      live.set;
+
+
+  document
+    .getElementById(
+      "valueValue"
+    )
+    .textContent =
+      live.value;
+
+
+  const twoD =
+    calculate2D(
+      live.set,
+      live.value
+    );
+
+
+  if (twoD) {
+    showBig2D(
+      twoD
+    );
+  }
+}
+
+
+// ============================================================
+// BLINK LIKE REFERENCE
+// ============================================================
+
+function blinkLiveNumbers(){
+
+  if (holdActive) {
+    return;
+  }
+
+
+  const nodes = [
+
+    document.getElementById(
+      "resultDigits"
+    ),
+
+    document.getElementById(
+      "setValue"
+    ),
+
+    document.getElementById(
+      "valueValue"
+    )
+  ];
+
+
+  if (
+    nodes.some(
+      node =>
+        !node ||
+        node.textContent.trim() ===
+        "--"
+    )
+  ) {
+    return;
+  }
+
+
+  nodes.forEach(
+    node =>
+      node.classList.remove(
+        "live-change"
+      )
+  );
+
+
+  void nodes[0].offsetWidth;
+
+
+  nodes.forEach(
+    node =>
+      node.classList.add(
+        "live-change"
+      )
+  );
+}
+
+
+// ============================================================
+// START / STOP LIVE MOVEMENT
+// ============================================================
+
+function startLiveMovement(){
+
+  if (holdActive) {
+    return;
+  }
+
+
+  paintLiveMarket();
+
+
+  if (!marketJumpTimer) {
+
+    marketJumpTimer =
+      setInterval(
+        function(){
+
+          if (
+            holdActive
+          ) {
+            return;
+          }
+
+
+          marketJumpIndex =
+            (
+              marketJumpIndex +
+              1
+            ) %
+            100000;
+
+
+          paintLiveMarket();
+
+        },
+        MARKET_JUMP_MS
+      );
+  }
+
+
+  if (!blinkTimer) {
+
+    blinkTimer =
+      setInterval(
+        blinkLiveNumbers,
+        BLINK_INTERVAL_MS
+      );
+  }
+}
+
+
+function stopLiveMovement(){
+
+  if (marketJumpTimer) {
+
+    clearInterval(
+      marketJumpTimer
+    );
+
+    marketJumpTimer =
+      null;
+  }
+
+
+  if (blinkTimer) {
+
+    clearInterval(
+      blinkTimer
+    );
+
+    blinkTimer =
+      null;
+  }
+}
+
+
+// ============================================================
+// FINAL ADMIN RESULT
+// NUMBER DISAPPEARS -> RING -> FINAL
+// ============================================================
+
+function showFinalWithRing(
+  data
+){
+
+  if (
+    ringBusy ||
+    !data ||
+    !/^\\d{2}$/.test(
+      data.result || ""
+    )
+  ) {
+    return;
+  }
+
+
+  ringBusy =
+    true;
+
+
+  holdActive =
+    true;
+
+
+  stopLiveMovement();
+
+
+  const digits =
+    document.getElementById(
+      "resultDigits"
+    );
+
+
+  const noResult =
+    document.getElementById(
+      "noResult"
+    );
+
+
+  const loader =
+    document.getElementById(
+      "resultLoader"
+    );
+
+
+  noResult.style.display =
+    "none";
+
+
+  digits.style.opacity =
+    "0";
+
+
+  setTimeout(
+    function(){
+
+      digits.style.display =
+        "none";
+
+
+      loader.classList.add(
+        "show"
+      );
+
+    },
+    220
+  );
+
+
+  setTimeout(
+    function(){
+
+      loader.classList.remove(
+        "show"
+      );
+
+
+      document
+        .getElementById(
+          "digit1"
+        )
+        .textContent =
+          data.result.charAt(
+            0
+          );
+
+
+      document
+        .getElementById(
+          "digit2"
+        )
+        .textContent =
+          data.result.charAt(
+            1
+          );
+
+
+      digits.style.display =
+        "flex";
+
+
+      digits.style.opacity =
+        "1";
+
+
+      document
+        .getElementById(
+          "setValue"
+        )
+        .textContent =
+          data.set ||
+          "--";
+
+
+      document
+        .getElementById(
+          "valueValue"
+        )
+        .textContent =
+          data.value ||
+          "--";
+
+
+      activeHoldRound =
+        data.round_time;
+
+
+      ringBusy =
+        false;
+
+    },
+    1200
+  );
+}
+
+
+// ============================================================
+// UPDATE ROUND CARDS
+// ============================================================
+
+function updateRoundCards(
+  results
+){
+
+  if (!results) {
+    return;
+  }
+
+
+  const ids = [
+    "r1100",
+    "r1300",
+    "r1500",
+    "r1700",
+    "r1900",
+    "r2100"
+  ];
+
+
+  for (
+    const id
+    of ids
+  ) {
+
+    const element =
+      document.getElementById(
+        id
+      );
+
+
+    if (element) {
+
+      element.textContent =
+        results[id] ||
+        "--";
+    }
+  }
+}
+
+
+// ============================================================
+// RENDER API STATE
+// ============================================================
+
+function renderState(
+  data
+){
+
+  if (!data) {
+    return;
+  }
+
+
+  serverBase =
+    Number(
+      data.serverNow
+    ) ||
+    Date.now();
+
+
+  perfBase =
+    performance.now();
+
+
+  marketBase =
+    data.market &&
+    data.market.ok
+      ? data.market
+      : null;
+
+
+  updateRoundCards(
+    data.results
+  );
+
+
+  const newHold =
+    Boolean(
+      data.resultHold &&
+      data.resultHold.active
+    );
+
+
+  // ========================================================
+  // HOLD STARTED
+  // ========================================================
+
+  if (newHold) {
+
+    const hold =
+      data.resultHold;
+
+
+    if (
+      !holdActive ||
+      activeHoldRound !==
+        hold.round_time
+    ) {
+
+      showFinalWithRing(
+        hold
+      );
+
+    } else {
+
+      holdActive =
+        true;
+
+
+      stopLiveMovement();
+
+
+      showBig2D(
+        hold.result
+      );
+
+
+      document
+        .getElementById(
+          "setValue"
+        )
+        .textContent =
+          hold.set ||
+          "--";
+
+
+      document
+        .getElementById(
+          "valueValue"
+        )
+        .textContent =
+          hold.value ||
+          "--";
+    }
+
+    return;
+  }
+
+
+  // ========================================================
+  // 3 MIN HOLD FINISHED
+  // ========================================================
+
+  if (
+    holdActive &&
+    !newHold
+  ) {
+
+    holdActive =
+      false;
+
+
+    activeHoldRound =
+      null;
+
+
+    marketJumpIndex =
+      0;
+
+
+    startLiveMovement();
+
+    return;
+  }
+
+
+  // ========================================================
+  // NORMAL LIVE
+  // ========================================================
+
+  holdActive =
+    false;
+
+
+  startLiveMovement();
+}
+
+
+// ============================================================
+// POLL LIVE API EVERY 2 SEC
+// ============================================================
+
+let loading =
+  false;
+
+
+async function loadLive(){
+
+  if (loading) {
+    return;
+  }
+
+
+  loading =
+    true;
+
 
   try {
 
@@ -1762,99 +2884,80 @@ async function checkLiveAPI() {
       );
 
 
-    if (!response.ok) {
-      return;
-    }
-
-
     const data =
       await response.json();
 
 
-    /* ===============================================
-       UPDATE RELEASED ROUND CARDS
-    =============================================== */
-
-    if (data.results) {
-
-      const ids = [
-        "r1100",
-        "r1300",
-        "r1500",
-        "r1700",
-        "r1900",
-        "r2100"
-      ];
-
-
-      for (const id of ids) {
-
-        const element =
-          document.getElementById(id);
-
-
-        if (element) {
-
-          element.textContent =
-            data.results[id] ||
-            "--";
-        }
-      }
-    }
-
-
-    /* ===============================================
-       NEW ROUND RELEASE DETECTION
-
-       Round time compare လုပ်ထားလို့
-       same result number ထပ်လာရင်တောင်
-       animation ကစားမယ်။
-    =============================================== */
-
     if (
-      data.round_time &&
-      data.result &&
-      data.result !== "--" &&
-      data.round_time !== currentFinalRound
+      !response.ok ||
+      !data.success
     ) {
-
-      showFinalResult(
-        data.result,
-        data.set,
-        data.value,
-        data.round_time
+      throw new Error(
+        "Live API error"
       );
     }
 
+
+    renderState(
+      data
+    );
+
   } catch (error) {
 
-    console.log(
-      "Live API Error:",
+    console.error(
       error
     );
+
+  } finally {
+
+    loading =
+      false;
   }
 }
 
 
-/* ==========================================================
-   START LIVE PLAY
-
-   Page ဖွင့်ထားချိန် Live ကစားမယ်။
-========================================================== */
-
-startLivePlay();
+loadLive();
 
 
-/* ==========================================================
-   API CHECK EVERY 1 SECOND
-========================================================== */
+apiTimer =
+  setInterval(
+    function(){
 
-checkLiveAPI();
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        loadLive();
+      }
+
+    },
+    2000
+  );
 
 
-setInterval(
-  checkLiveAPI,
-  1000
+window.addEventListener(
+  "focus",
+  loadLive
+);
+
+
+window.addEventListener(
+  "online",
+  loadLive
+);
+
+
+document.addEventListener(
+  "visibilitychange",
+  function(){
+
+    if (
+      document.visibilityState ===
+      "visible"
+    ) {
+      loadLive();
+    }
+  }
 );
 
 </script>
@@ -1869,7 +2972,9 @@ setInterval(
 // ADMIN LOGIN PAGE
 // ============================================================
 
-function adminLoginPage(message = "") {
+function adminLoginPage(
+  message = ""
+) {
 
   return `<!DOCTYPE html>
 
@@ -1880,160 +2985,140 @@ function adminLoginPage(message = "") {
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width,initial-scale=1.0">
 
 <title>Brazil 2D Admin</title>
 
 <style>
 
-* {
-  box-sizing:
-    border-box;
+*{
+  box-sizing:border-box;
 }
 
-body {
-  margin: 0;
-
-  background:
-    #f0f5f2;
-
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
+body{
+  margin:0;
+  background:#f0f5f2;
+  font-family:Arial,Helvetica,sans-serif;
 }
 
-.page {
-  width: 100%;
+.page{
+  width:100%;
+  max-width:480px;
+  min-height:100vh;
+  margin:auto;
 
-  max-width: 480px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 
-  min-height: 100vh;
-
-  margin: auto;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  padding: 25px;
+  padding:25px;
 }
 
-.card {
-  width: 100%;
+.card{
+  width:100%;
 
-  background: #fff;
+  background:#fff;
 
-  border-radius: 25px;
+  border-radius:25px;
 
-  padding:
-    32px
-    24px;
+  padding:32px 24px;
 
   box-shadow:
-    0
-    8px
-    30px
+    0 8px 30px
     rgba(0,0,0,.10);
 }
 
-.logo {
-  text-align: center;
+.logo{
+  text-align:center;
 
-  color: #109447;
+  color:#109447;
 
-  font-size: 27px;
+  font-size:27px;
 
-  font-weight: 900;
+  font-weight:900;
 
-  margin-bottom: 8px;
+  margin-bottom:8px;
 }
 
-.sub {
-  text-align: center;
+.sub{
+  text-align:center;
 
-  color: #777;
+  color:#777;
 
-  margin-bottom: 28px;
+  margin-bottom:28px;
 }
 
-.message {
-  text-align: center;
+.message{
+  text-align:center;
 
-  color: #d92727;
+  color:#d92727;
 
-  font-weight: 800;
+  font-weight:800;
 
-  margin-bottom: 18px;
+  margin-bottom:18px;
 }
 
-label {
-  display: block;
+label{
+  display:block;
 
-  font-weight: 800;
+  font-weight:800;
 
-  margin-bottom: 8px;
+  margin-bottom:8px;
 }
 
-input {
-  width: 100%;
+input{
+  width:100%;
 
-  height: 52px;
+  height:52px;
 
   border:
-    1px
-    solid
+    1px solid
     #ccc;
 
-  border-radius: 12px;
+  border-radius:12px;
 
-  padding:
-    0
-    14px;
+  padding:0 14px;
 
-  font-size: 17px;
+  font-size:17px;
 }
 
-button {
-  width: 100%;
+button{
+  width:100%;
 
-  height: 54px;
+  height:54px;
 
-  border: 0;
+  border:0;
 
-  border-radius: 14px;
+  border-radius:14px;
 
-  margin-top: 20px;
+  margin-top:20px;
 
-  background: #109447;
+  background:#109447;
 
-  color: #fff;
+  color:#fff;
 
-  font-size: 18px;
+  font-size:18px;
 
-  font-weight: 900;
+  font-weight:900;
 }
 
-.home {
-  display: block;
+.home{
+  display:block;
 
-  text-align: center;
+  text-align:center;
 
-  margin-top: 20px;
+  margin-top:20px;
 
-  color: #0762a9;
+  color:#0762a9;
 
-  text-decoration: none;
+  text-decoration:none;
 
-  font-weight: 800;
+  font-weight:800;
 }
 
 </style>
 
 </head>
-
 
 <body>
 
@@ -2041,12 +3126,18 @@ button {
 
 <div class="card">
 
+
 <div class="logo">
+
 BRAZIL 2D 🇧🇷
+
 </div>
 
+
 <div class="sub">
+
 ADMIN LOGIN
+
 </div>
 
 
@@ -2076,7 +3167,9 @@ autocomplete="current-password"
 >
 
 
-<button type="submit">
+<button
+type="submit"
+>
 LOGIN
 </button>
 
@@ -2088,7 +3181,9 @@ LOGIN
 href="/"
 class="home"
 >
+
 ← Back to Brazil 2D
+
 </a>
 
 
@@ -2106,15 +3201,19 @@ class="home"
 // ADMIN PAGE
 // ============================================================
 
-async function adminPage(DB, requestedDate) {
+async function adminPage(
+  DB,
+  requestedDate
+) {
 
   const today =
     getMyanmarDate();
 
 
   const selectedDate =
-    /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(
-      requestedDate || ""
+    /^\\d{4}-\\d{2}-\\d{2}$/.test(
+      requestedDate ||
+      ""
     )
       ? requestedDate
       : today;
@@ -2132,38 +3231,30 @@ async function adminPage(DB, requestedDate) {
 
       WHERE result_date = ?
     `)
-    .bind(selectedDate)
+    .bind(
+      selectedDate
+    )
     .all();
 
 
   const rows =
-    query.results || [];
+    query.results ||
+    [];
 
 
-  const map = {};
+  const map =
+    {};
 
 
-  let setValue = "";
+  for (
+    const row
+    of rows
+  ) {
 
-  let marketValue = "";
-
-
-  for (const row of rows) {
-
-    map[row.round_time] =
-      row.result || "";
-
-
-    if (row.set_value) {
-      setValue =
-        row.set_value;
-    }
-
-
-    if (row.market_value) {
-      marketValue =
-        row.market_value;
-    }
+    map[
+      row.round_time
+    ] =
+      row;
   }
 
 
@@ -2176,180 +3267,176 @@ async function adminPage(DB, requestedDate) {
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width,initial-scale=1.0">
 
 <title>Brazil 2D Admin</title>
 
-
 <style>
 
-* {
-  box-sizing:
-    border-box;
+*{
+  box-sizing:border-box;
 }
 
-body {
-  margin: 0;
+body{
+  margin:0;
 
   font-family:
     Arial,
     Helvetica,
     sans-serif;
 
-  background:
-    #f3f6f4;
+  background:#f3f6f4;
 }
 
-.admin {
-  width: 100%;
+.admin{
+  width:100%;
 
-  max-width: 500px;
+  max-width:500px;
 
-  margin: auto;
+  margin:auto;
 
-  min-height: 100vh;
+  min-height:100vh;
 
-  background: #fff;
+  background:#fff;
 }
 
-.header {
-  background:
-    #109447;
+.header{
+  background:#109447;
 
-  color: #fff;
+  color:#fff;
 
-  padding: 22px;
+  padding:22px;
 
-  text-align: center;
+  text-align:center;
 
-  font-size: 24px;
+  font-size:24px;
 
-  font-weight: 900;
+  font-weight:900;
 }
 
-.content {
-  padding: 22px;
+.content{
+  padding:22px;
 }
 
-label {
-  display: block;
+label{
+  display:block;
 
-  font-weight: 800;
+  font-weight:800;
 
-  color: #333;
+  color:#333;
 
-  margin:
-    15px
-    0
-    7px;
+  margin:15px 0 7px;
 }
 
-input {
-  width: 100%;
+input{
+  width:100%;
 
-  height: 48px;
+  height:48px;
 
-  padding:
-    0
-    13px;
+  padding:0 13px;
 
   border:
-    1px
-    solid
+    1px solid
     #ccc;
 
-  border-radius: 10px;
+  border-radius:10px;
 
-  font-size: 17px;
+  font-size:17px;
 }
 
-.grid {
-  display: grid;
+.grid{
+  display:grid;
 
   grid-template-columns:
     1fr
     1fr;
 
-  gap: 12px;
+  gap:12px;
 }
 
-.card {
+.card{
   border:
-    1px
-    solid
+    1px solid
     #ddd;
 
-  border-radius: 14px;
+  border-radius:14px;
 
-  padding: 12px;
+  padding:12px;
 }
 
-.card label {
-  margin-top: 0;
+.card label{
+  margin-top:0;
 
-  color: #109447;
+  color:#109447;
 }
 
-.save {
-  width: 100%;
+.save{
+  width:100%;
 
-  height: 54px;
+  height:54px;
 
-  margin-top: 24px;
+  margin-top:24px;
 
-  border: 0;
+  border:0;
 
-  border-radius: 14px;
+  border-radius:14px;
 
-  background: #109447;
+  background:#109447;
 
-  color: #fff;
+  color:#fff;
 
-  font-size: 18px;
+  font-size:18px;
 
-  font-weight: 900;
+  font-weight:900;
 }
 
-.links {
-  display: flex;
+.links{
+  display:flex;
 
-  gap: 10px;
+  gap:10px;
 
-  margin-top: 20px;
+  margin-top:20px;
 }
 
-.links a {
-  flex: 1;
+.links a{
+  flex:1;
 
-  text-align: center;
+  text-align:center;
 
-  padding:
-    14px
-    5px;
+  padding:14px 5px;
 
-  border-radius: 12px;
+  border-radius:12px;
 
-  text-decoration: none;
+  text-decoration:none;
 
-  font-weight: 800;
+  font-weight:800;
 }
 
-.home {
-  color: #0762a9;
+.home{
+  color:#0762a9;
 
-  background: #edf6fc;
+  background:#edf6fc;
 }
 
-.logout {
-  color: #c62828;
+.logout{
+  color:#c62828;
 
-  background: #fff0f0;
+  background:#fff0f0;
+}
+
+.help{
+  margin-top:10px;
+
+  color:#777;
+
+  font-size:13px;
+
+  line-height:1.5;
 }
 
 </style>
 
 </head>
-
 
 <body>
 
@@ -2384,34 +3471,16 @@ name="result_date"
 id="resultDate"
 value="${escapeHtml(selectedDate)}"
 required
-onchange="loadSelectedDate()"
+onchange="loadDate()"
 >
 
 
-<label>
-SET VALUE
-</label>
+<div class="help">
 
+6 ကြိမ်လုံး 2D Result ကို ကြိုသတ်မှတ်နိုင်ပါတယ်။
+အချိန်မရောက်ခင် User ဘက်မှာ Round Result ကို -- ပဲပြမယ်။
 
-<input
-type="text"
-name="set_value"
-value="${escapeHtml(setValue)}"
-placeholder="Example: 2,081.50"
->
-
-
-<label>
-MARKET VALUE
-</label>
-
-
-<input
-type="text"
-name="market_value"
-value="${escapeHtml(marketValue)}"
-placeholder="Example: 69,135.01"
->
+</div>
 
 
 <label>
@@ -2422,13 +3491,23 @@ placeholder="Example: 69,135.01"
 <div class="grid">
 
 
-${ROUNDS.map(round => `
+${ROUNDS.map(round => {
+
+  const row =
+    map[
+      round.time
+    ];
+
+
+  return `
 
 <div class="card">
 
 
 <label>
+
 ${round.time}
+
 </label>
 
 
@@ -2436,8 +3515,13 @@ ${round.time}
 type="text"
 name="${round.field}"
 value="${
-  valid2D(map[round.time])
-    ? escapeHtml(map[round.time])
+  row &&
+  valid2D(
+    row.result
+  )
+    ? escapeHtml(
+        row.result
+      )
     : ""
 }"
 maxlength="2"
@@ -2448,7 +3532,9 @@ placeholder="--"
 
 </div>
 
-`).join("")}
+`;
+
+}).join("")}
 
 
 </div>
@@ -2500,7 +3586,7 @@ Logout
 
 <script>
 
-function loadSelectedDate() {
+function loadDate(){
 
   const date =
     document
@@ -2514,7 +3600,9 @@ function loadSelectedDate() {
 
     window.location.href =
       "/admin?date=" +
-      encodeURIComponent(date);
+      encodeURIComponent(
+        date
+      );
   }
 }
 
@@ -2531,7 +3619,10 @@ function loadSelectedDate() {
 // SAVE ADMIN RESULTS
 // ============================================================
 
-async function saveResults(request, env) {
+async function saveResults(
+  request,
+  env
+) {
 
   const form =
     await request.formData();
@@ -2539,12 +3630,14 @@ async function saveResults(request, env) {
 
   const resultDate =
     String(
-      form.get("result_date") || ""
+      form.get(
+        "result_date"
+      ) || ""
     ).trim();
 
 
   if (
-    !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(
+    !/^\\d{4}-\\d{2}-\\d{2}$/.test(
       resultDate
     )
   ) {
@@ -2552,42 +3645,37 @@ async function saveResults(request, env) {
     return new Response(
       "Invalid date",
       {
-        status: 400
+        status:400
       }
     );
   }
 
 
-  const setValue =
-    String(
-      form.get("set_value") || ""
-    ).trim();
-
-
-  const marketValue =
-    String(
-      form.get("market_value") || ""
-    ).trim();
-
-
-  for (const round of ROUNDS) {
+  for (
+    const round
+    of ROUNDS
+  ) {
 
     const newResult =
       String(
-        form.get(round.field) || ""
+        form.get(
+          round.field
+        ) || ""
       ).trim();
 
 
     if (
       newResult &&
-      !valid2D(newResult)
+      !valid2D(
+        newResult
+      )
     ) {
 
       return new Response(
         round.time +
         " result must be exactly 2 digits.",
         {
-          status: 400
+          status:400
         }
       );
     }
@@ -2619,34 +3707,16 @@ async function saveResults(request, env) {
       newResult ||
       (
         existing &&
-        valid2D(existing.result)
-
+        valid2D(
+          existing.result
+        )
           ? existing.result
-
           : "--"
       );
 
 
-    const finalSet =
-      setValue ||
-      (
-        existing
-          ? existing.set_value
-          : null
-      );
-
-
-    const finalMarket =
-      marketValue ||
-      (
-        existing
-          ? existing.market_value
-          : null
-      );
-
-
     await env.DB.prepare(`
-      INSERT INTO results (
+      INSERT INTO results(
         result_date,
         round_time,
         result,
@@ -2655,7 +3725,7 @@ async function saveResults(request, env) {
         updated_at
       )
 
-      VALUES (
+      VALUES(
         ?,
         ?,
         ?,
@@ -2674,12 +3744,6 @@ async function saveResults(request, env) {
         result =
           excluded.result,
 
-        set_value =
-          excluded.set_value,
-
-        market_value =
-          excluded.market_value,
-
         updated_at =
           CURRENT_TIMESTAMP
     `)
@@ -2687,8 +3751,10 @@ async function saveResults(request, env) {
         resultDate,
         round.time,
         finalResult,
-        finalSet,
-        finalMarket
+        existing?.set_value ||
+          null,
+        existing?.market_value ||
+          null
       )
       .run();
   }
@@ -2697,7 +3763,9 @@ async function saveResults(request, env) {
   return Response.redirect(
     new URL(
       "/admin?date=" +
-      encodeURIComponent(resultDate),
+      encodeURIComponent(
+        resultDate
+      ),
       request.url
     ).toString(),
     303
@@ -2710,7 +3778,9 @@ async function saveResults(request, env) {
 // DATE + 6 RESULTS ONLY
 // ============================================================
 
-async function historyPage(DB) {
+async function historyPage(
+  DB
+) {
 
   const query =
     await DB.prepare(`
@@ -2722,7 +3792,6 @@ async function historyPage(DB) {
       FROM results
 
       ORDER BY
-
         result_date DESC,
 
         CASE round_time
@@ -2753,23 +3822,37 @@ async function historyPage(DB) {
 
 
   const rows =
-    query.results || [];
+    query.results ||
+    [];
 
 
-  const grouped = {};
+  const grouped =
+    {};
 
 
-  for (const row of rows) {
+  for (
+    const row
+    of rows
+  ) {
 
-    if (!grouped[row.result_date]) {
+    if (
+      !grouped[
+        row.result_date
+      ]
+    ) {
 
       grouped[
         row.result_date
-      ] = {};
+      ] =
+        {};
     }
 
 
-    if (valid2D(row.result)) {
+    if (
+      valid2D(
+        row.result
+      )
+    ) {
 
       grouped[
         row.result_date
@@ -2782,20 +3865,26 @@ async function historyPage(DB) {
 
 
   const historyHtml =
-    Object.keys(grouped)
-      .map(date => {
+    Object
+      .keys(grouped)
+      .map(
+        date => {
 
-        const results =
-          grouped[date];
+          const results =
+            grouped[
+              date
+            ];
 
 
-        return `
+          return `
 
 <div class="day">
 
 
 <div class="date">
+
 ${escapeHtml(date)}
+
 </div>
 
 
@@ -2808,15 +3897,20 @@ ${ROUNDS.map(round => `
 
 
 <div class="time">
+
 ${round.time}
+
 </div>
 
 
 <div class="number">
+
 ${escapeHtml(
-  results[round.time] ||
-  "--"
+  results[
+    round.time
+  ] || "--"
 )}
+
 </div>
 
 
@@ -2831,8 +3925,8 @@ ${escapeHtml(
 </div>
 
 `;
-
-      })
+        }
+      )
       .join("");
 
 
@@ -2845,184 +3939,165 @@ ${escapeHtml(
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width,initial-scale=1.0">
 
 <title>Brazil 2D History</title>
 
-
 <style>
 
-* {
-  box-sizing:
-    border-box;
+*{
+  box-sizing:border-box;
 }
 
-body {
-  margin: 0;
+body{
+  margin:0;
 
   font-family:
     Arial,
     Helvetica,
     sans-serif;
 
-  background:
-    #f2f6f3;
+  background:#f2f6f3;
 
-  color: #111;
+  color:#111;
 }
 
-.page {
-  width: 100%;
+.page{
+  width:100%;
 
-  max-width: 480px;
+  max-width:480px;
 
-  min-height: 100vh;
+  min-height:100vh;
 
-  margin: auto;
+  margin:auto;
 
-  background: #fff;
+  background:#fff;
 }
 
-.header {
-  background:
-    #109447;
+.header{
+  background:#109447;
 
-  color: #fff;
+  color:#fff;
 
-  min-height: 66px;
+  min-height:66px;
 
-  display: flex;
+  display:flex;
 
-  align-items: center;
+  align-items:center;
 
-  padding:
-    0
-    18px;
+  padding:0 18px;
 }
 
-.back {
-  font-size: 34px;
+.back{
+  font-size:34px;
 
-  margin-right: 15px;
+  margin-right:15px;
 
-  cursor: pointer;
+  cursor:pointer;
 }
 
-.title {
-  font-size: 20px;
+.title{
+  font-size:20px;
 
-  font-weight: 900;
+  font-weight:900;
 }
 
-.content {
-  padding: 16px;
+.content{
+  padding:16px;
 }
 
-.day {
-  margin-bottom: 20px;
+.day{
+  margin-bottom:20px;
 
-  background: #fff;
+  background:#fff;
 
-  border-radius: 18px;
+  border-radius:18px;
 
   box-shadow:
-    0
-    4px
-    16px
+    0 4px 16px
     rgba(0,0,0,.08);
 
-  padding: 15px;
+  padding:15px;
 }
 
-.date {
-  color:
-    #0864ac;
+.date{
+  color:#0864ac;
 
-  font-size: 19px;
+  font-size:19px;
 
-  font-weight: 900;
+  font-weight:900;
 
-  margin-bottom: 14px;
+  margin-bottom:14px;
 }
 
-.rounds {
-  display: grid;
+.rounds{
+  display:grid;
 
   grid-template-columns:
     1fr
     1fr;
 
-  gap: 8px;
+  gap:8px;
 }
 
-.round {
-  border:
-    1.5px
-    solid;
+.round{
+  border:1.5px solid;
 
-  border-radius: 12px;
+  border-radius:12px;
 
-  padding: 10px;
+  padding:10px;
 
-  text-align: center;
+  text-align:center;
 
-  background: #fff;
+  background:#fff;
 }
 
-.round.green {
-  border-color:
-    #109447;
+.round.green{
+  border-color:#109447;
 }
 
-.round.yellow {
-  border-color:
-    #e8c327;
+.round.yellow{
+  border-color:#e8c327;
 }
 
-.round.blue {
-  border-color:
-    #176caf;
+.round.blue{
+  border-color:#176caf;
 }
 
-.time {
-  font-size: 12px;
+.time{
+  font-size:12px;
 
-  font-weight: 800;
+  font-weight:800;
 
-  margin-bottom: 5px;
+  margin-bottom:5px;
 }
 
-.round.green .time {
-  color:
-    #109447;
+.round.green .time{
+  color:#109447;
 }
 
-.round.yellow .time {
-  color:
-    #e8b900;
+.round.yellow .time{
+  color:#e8b900;
 }
 
-.round.blue .time {
-  color:
-    #0762a9;
+.round.blue .time{
+  color:#0762a9;
 }
 
-.number {
-  font-size: 27px;
+.number{
+  font-size:27px;
 
-  font-weight: 900;
+  font-weight:900;
 
-  color: #111;
+  color:#111;
 }
 
-.empty {
-  text-align: center;
+.empty{
+  text-align:center;
 
-  color: #999;
+  color:#999;
 
-  padding:
-    80px
-    20px;
+  padding:80px 20px;
 }
 
 </style>
