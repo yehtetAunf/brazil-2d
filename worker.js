@@ -3,23 +3,17 @@ export default {
     const url = new URL(request.url);
 
     try {
-      // =========================
       // MAIN PAGE
-      // =========================
       if (url.pathname === "/" && request.method === "GET") {
         return html(await mainPage(env.DB));
       }
 
-      // =========================
       // HISTORY
-      // =========================
       if (url.pathname === "/history" && request.method === "GET") {
         return html(await historyPage(env.DB));
       }
 
-      // =========================
-      // ADMIN LOGIN
-      // =========================
+      // ADMIN
       if (url.pathname === "/admin" && request.method === "GET") {
         const loggedIn = await isAdmin(request, env);
 
@@ -30,24 +24,24 @@ export default {
         return html(await adminPage(env.DB));
       }
 
+      // ADMIN LOGIN
       if (url.pathname === "/admin/login" && request.method === "POST") {
         return await adminLogin(request, env);
       }
 
+      // ADMIN LOGOUT
       if (url.pathname === "/admin/logout") {
         return new Response(null, {
           status: 302,
           headers: {
-            "Location": "/admin",
+            Location: "/admin",
             "Set-Cookie":
               "brazil_admin=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict"
           }
         });
       }
 
-      // =========================
-      // ADMIN SAVE
-      // =========================
+      // SAVE RESULTS
       if (url.pathname === "/admin/save" && request.method === "POST") {
         const loggedIn = await isAdmin(request, env);
 
@@ -81,7 +75,7 @@ export default {
 
 
 // ============================================================
-// SETTINGS
+// ROUND SETTINGS
 // ============================================================
 
 const ROUNDS = [
@@ -256,7 +250,6 @@ function arrayBufferToBase64Url(buffer) {
 
 function getCookie(request, name) {
   const cookie = request.headers.get("Cookie") || "";
-
   const pieces = cookie.split(";");
 
   for (const piece of pieces) {
@@ -334,9 +327,7 @@ async function adminLogin(request, env) {
     password !== env.ADMIN_PASSWORD
   ) {
     return html(
-      adminLoginPage(
-        "Wrong password."
-      ),
+      adminLoginPage("Wrong password."),
       401
     );
   }
@@ -349,7 +340,7 @@ async function adminLogin(request, env) {
   return new Response(null, {
     status: 303,
     headers: {
-      "Location":
+      Location:
         new URL(
           "/admin",
           request.url
@@ -489,9 +480,7 @@ body {
 }
 
 
-/* =====================
-   LIVE HEADER
-===================== */
+/* LIVE HEADER */
 
 .live-header {
   padding: 22px 24px;
@@ -552,9 +541,7 @@ body {
 }
 
 
-/* =====================
-   HERO
-===================== */
+/* HERO */
 
 .hero {
   position: relative;
@@ -636,9 +623,7 @@ body {
 }
 
 
-/* =====================
-   VALUES
-===================== */
+/* VALUE CARD */
 
 .value-card {
   position: relative;
@@ -691,9 +676,7 @@ body {
 }
 
 
-/* =====================
-   ROUNDS
-===================== */
+/* ROUNDS */
 
 .round-grid {
   padding: 0 22px;
@@ -760,9 +743,7 @@ body {
 }
 
 
-/* =====================
-   HISTORY
-===================== */
+/* HISTORY BUTTON */
 
 .bottom {
   padding:
@@ -778,8 +759,7 @@ body {
   height: 72px;
 
   border:
-    2px
-    solid
+    2px solid
     #15994c;
 
   border-radius: 38px;
@@ -1349,9 +1329,7 @@ input {
     13px;
 
   border:
-    1px
-    solid
-    #ccc;
+    1px solid #ccc;
 
   border-radius: 10px;
 
@@ -1370,9 +1348,7 @@ input {
 
 .card {
   border:
-    1px
-    solid
-    #ddd;
+    1px solid #ddd;
 
   border-radius: 14px;
 
@@ -1718,7 +1694,8 @@ async function saveResults(request, env) {
 
 
 // ============================================================
-// HISTORY
+// HISTORY PAGE
+// SET VALUE / MARKET VALUE မပြပါ
 // ============================================================
 
 async function historyPage(DB) {
@@ -1727,9 +1704,7 @@ async function historyPage(DB) {
       SELECT
         result_date,
         round_time,
-        result,
-        set_value,
-        market_value
+        result
 
       FROM results
 
@@ -1737,27 +1712,13 @@ async function historyPage(DB) {
         result_date DESC,
 
         CASE round_time
-
-          WHEN '11:00 AM'
-            THEN 1
-
-          WHEN '01:00 PM'
-            THEN 2
-
-          WHEN '03:00 PM'
-            THEN 3
-
-          WHEN '05:00 PM'
-            THEN 4
-
-          WHEN '07:00 PM'
-            THEN 5
-
-          WHEN '09:00 PM'
-            THEN 6
-
+          WHEN '11:00 AM' THEN 1
+          WHEN '01:00 PM' THEN 2
+          WHEN '03:00 PM' THEN 3
+          WHEN '05:00 PM' THEN 4
+          WHEN '07:00 PM' THEN 5
+          WHEN '09:00 PM' THEN 6
           ELSE 99
-
         END
     `)
     .all();
@@ -1769,34 +1730,16 @@ async function historyPage(DB) {
 
   for (const row of rows) {
     if (!grouped[row.result_date]) {
-      grouped[row.result_date] = {
-        setValue: "",
-        marketValue: "",
-        results: {}
-      };
+      grouped[row.result_date] = {};
     }
 
     if (valid2D(row.result)) {
       grouped[
         row.result_date
-      ].results[
+      ][
         row.round_time
       ] =
         row.result;
-    }
-
-    if (row.set_value) {
-      grouped[
-        row.result_date
-      ].setValue =
-        row.set_value;
-    }
-
-    if (row.market_value) {
-      grouped[
-        row.result_date
-      ].marketValue =
-        row.market_value;
     }
   }
 
@@ -1804,62 +1747,39 @@ async function historyPage(DB) {
   const historyHtml =
     Object.keys(grouped)
       .map(date => {
-        const day =
+
+        const results =
           grouped[date];
 
         return `
 
 <div class="day">
 
-<div class="date">
-  ${escapeHtml(date)}
-</div>
+  <div class="date">
+    ${escapeHtml(date)}
+  </div>
 
-<div class="values">
+  <div class="rounds">
 
-<div>
-  SET VALUE
-  <strong>
-    ${escapeHtml(
-      day.setValue || "--"
-    )}
-  </strong>
-</div>
+    ${ROUNDS.map(round => `
 
-<div>
-  MARKET VALUE
-  <strong>
-    ${escapeHtml(
-      day.marketValue || "--"
-    )}
-  </strong>
-</div>
+      <div class="round ${round.color}">
 
-</div>
+        <div class="time">
+          ${round.time}
+        </div>
 
+        <div class="number">
+          ${escapeHtml(
+            results[round.time] || "--"
+          )}
+        </div>
 
-<div class="rounds">
+      </div>
 
-${ROUNDS.map(round => `
+    `).join("")}
 
-<div class="round ${round.color}">
-
-<div class="time">
-  ${round.time}
-</div>
-
-<div class="number">
-  ${escapeHtml(
-    day.results[round.time] ||
-    "--"
-  )}
-</div>
-
-</div>
-
-`).join("")}
-
-</div>
+  </div>
 
 </div>
 
@@ -1968,45 +1888,7 @@ body {
 
   font-weight: 900;
 
-  margin-bottom: 13px;
-}
-
-.values {
-  display: grid;
-
-  grid-template-columns:
-    1fr
-    1fr;
-
-  gap: 10px;
-
   margin-bottom: 15px;
-
-  color: #109447;
-
-  font-size: 11px;
-
-  font-weight: 800;
-}
-
-.values div {
-  text-align: center;
-
-  padding: 10px 4px;
-
-  background: #f4faf6;
-
-  border-radius: 9px;
-}
-
-.values strong {
-  display: block;
-
-  margin-top: 4px;
-
-  color: #111;
-
-  font-size: 14px;
 }
 
 .rounds {
@@ -2029,6 +1911,8 @@ body {
   padding: 11px;
 
   text-align: center;
+
+  background: #fff;
 }
 
 .round.green {
@@ -2051,10 +1935,24 @@ body {
   margin-bottom: 5px;
 }
 
+.round.green .time {
+  color: #109447;
+}
+
+.round.yellow .time {
+  color: #e8b900;
+}
+
+.round.blue .time {
+  color: #0762a9;
+}
+
 .number {
   font-size: 27px;
 
   font-weight: 900;
+
+  color: #111;
 }
 
 .empty {
@@ -2073,37 +1971,37 @@ body {
 
 <div class="page">
 
-<div class="header">
+  <div class="header">
 
-<div
-  class="back"
-  onclick="history.back()"
->
-  ‹
-</div>
+    <div
+      class="back"
+      onclick="window.location.href='/'"
+    >
+      ‹
+    </div>
 
-<div class="title">
-  BRAZIL 2D HISTORY 🇧🇷
-</div>
+    <div class="title">
+      BRAZIL 2D HISTORY 🇧🇷
+    </div>
 
-</div>
-
-
-<div class="content">
-
-${
-  historyHtml ||
-  `
-  <div class="empty">
-    No history data yet.
   </div>
-  `
-}
 
-</div>
+
+  <div class="content">
+
+    ${
+      historyHtml ||
+      `
+      <div class="empty">
+        No history data yet.
+      </div>
+      `
+    }
+
+  </div>
 
 </div>
 
 </body>
 </html>`;
-          }
+}
