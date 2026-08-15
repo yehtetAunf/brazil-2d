@@ -54,30 +54,6 @@ body {
   overflow: hidden;
 }
 
-/* TOP HEADER */
-.top-header {
-  height: 72px;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid #e6e6e6;
-  position: relative;
-}
-
-.top-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 29px;
-  font-weight: 900;
-  color: #109447;
-}
-
-.flag {
-  font-size: 31px;
-}
-
 /* LIVE TITLE ROW */
 .live-header {
   padding: 22px 24px;
@@ -324,10 +300,6 @@ body {
 }
 
 @media (max-width: 380px) {
-  .top-title {
-    font-size: 25px;
-  }
-
   .brand {
     font-size: 21px;
   }
@@ -351,13 +323,6 @@ body {
 <body>
 
 <div class="app">
-
-  <header class="top-header">
-    <div class="top-title">
-      BRAZIL 2D
-      <span class="flag">🇧🇷</span>
-    </div>
-  </header>
 
   <section class="live-header">
     <div class="brand">
@@ -554,4 +519,4 @@ body {
 </div>
 </body>
 </html>`;
-    }
+}
