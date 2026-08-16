@@ -411,7 +411,7 @@ async function mainPage(DB) {
 *{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;min-height:100%;background:#fff;font-family:Arial,Helvetica,sans-serif}body{color:#111}.app{width:100%;max-width:480px;min-height:100dvh;margin:0 auto;background:#fff;overflow:hidden}
 .live-header{height:58px;padding:8px 18px;display:flex;align-items:center;justify-content:space-between}.brand{font-size:22px;font-weight:900;font-style:italic;white-space:nowrap}.brand-brazil{color:#109447}.brand-2{color:#0864ac}.brand-d{color:#f4be00}.live-pill{background:#e2f5e9;color:#078f40;padding:9px 12px;border-radius:26px;font-size:11px;font-weight:900;white-space:nowrap}.live-dot{display:inline-block;width:10px;height:10px;background:#08a34b;border-radius:50%;margin-right:6px;vertical-align:-1px;animation:pulse 1.3s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .hero{position:relative;height:215px;text-align:center;overflow:hidden;background:radial-gradient(circle at 12% 70%,rgba(16,148,71,.08),transparent 25%),radial-gradient(circle at 88% 68%,rgba(16,148,71,.08),transparent 22%),#fff}.hero:after{content:"";position:absolute;left:-8%;right:-8%;bottom:0;height:56px;background:linear-gradient(168deg,transparent 0 30%,rgba(23,156,79,.5) 31% 52%,rgba(247,205,26,.8) 53% 65%,rgba(16,101,179,.55) 66% 100%);z-index:0}.hero-content{height:100%;position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:36px}
-.live-result-box{width:100%;height:126px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}.result-digits{display:flex;align-items:center;justify-content:center;line-height:.86;will-change:transform,opacity}.digit{font-size:clamp(110px,31vw,148px);font-weight:900;letter-spacing:-8px}.digit-one{color:#109447}.digit-two{color:#ffc400}.no-result{color:#111;font-size:64px;font-weight:900}.jump-out{animation:jumpOut .28s cubic-bezier(.4,0,.8,.2) forwards}.jump-in{animation:jumpIn .32s cubic-bezier(.2,.8,.2,1) forwards}@keyframes jumpOut{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-38px) scale(.96);opacity:0}}@keyframes jumpIn{0%{transform:translateY(38px) scale(.96);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+.live-result-box{width:100%;height:126px;position:relative;display:flex;align-items:center;justify-content:center}.result-digits{display:flex;align-items:center;justify-content:center;line-height:.86}.digit{font-size:clamp(110px,31vw,148px);font-weight:900;letter-spacing:-8px}.digit-one{color:#109447}.digit-two{color:#ffc400}.no-result{color:#111;font-size:64px;font-weight:900}.live-change{animation:liveBlink .56s ease-in-out 1}@keyframes liveBlink{0%{opacity:1;transform:scale(1)}42%{opacity:0;transform:scale(.985)}58%{opacity:0;transform:scale(.985)}100%{opacity:1;transform:scale(1)}}
 .result-loader{display:none;position:absolute;width:72px;height:72px;border-radius:50%;border:7px solid rgba(70,70,200,.12);border-top-color:#315fd4;border-right-color:#8b42db;border-bottom-color:#315fd4;animation:resultSpin .7s linear infinite}.result-loader.show{display:block}@keyframes resultSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}.date-time{color:#075ea8;font-size:15px;font-weight:900;white-space:nowrap}
 .value-card{position:relative;z-index:5;width:calc(100% - 36px);height:76px;margin:-28px auto 12px;background:#fff;border-radius:20px;box-shadow:0 5px 16px rgba(0,0,0,.12);display:flex;align-items:center;padding:8px}.value-item{width:50%;text-align:center;padding:2px 8px}.value-item:first-child{border-right:1px solid #e4e4e4}.value-label{color:#0b9347;font-size:12px;font-weight:900;margin-bottom:5px}.value-number{color:#050505;font-size:21px;font-weight:900;white-space:nowrap}
 .round-grid{padding:0 18px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px 10px}.round{height:73px;border:2px solid;border-radius:15px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}.round.green{border-color:#16984d}.round.yellow{border-color:#e8c327}.round.blue{border-color:#176caf}.round-time{font-size:12px;font-weight:900;margin-bottom:4px}.round.green .round-time{color:#109447}.round.yellow .round-time{color:#e8b900}.round.blue .round-time{color:#0762a9}.round-number{color:#0a0a0a;font-size:29px;line-height:1;font-weight:900}
@@ -429,22 +429,23 @@ async function mainPage(DB) {
 </div>
 <script>
 const MARKET_JUMP_MS=${MARKET_JUMP_MS};
+const BLINK_INTERVAL_MS=3500;
 let serverBase=${Number(state.serverNow)};
 let perfBase=performance.now();
-let marketBase=null, marketJumpIndex=0, marketJumpTimer=null, apiTimer=null;
+let marketBase=null, marketJumpIndex=0, marketJumpTimer=null, blinkTimer=null, apiTimer=null;
 let holdActive=${hold?.active ? "true" : "false"};
 let activeHoldRound=${JSON.stringify(hold?.round_time || null)};
-let ringBusy=false, loading=false, jumpBusy=false;
+let ringBusy=false, loading=false;
 function estimatedServerNow(){return serverBase+(performance.now()-perfBase)}
 function updateClock(){const now=new Date(estimatedServerNow());const date=new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Yangon",day:"2-digit",month:"2-digit",year:"numeric"}).format(now);const time=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Yangon",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}).format(now);document.getElementById("dateTime").textContent=date+" | "+time}setInterval(updateClock,1000);updateClock();
 function format2(v){return Number(v).toFixed(2)}
 function makeJumpMarket(base,index){if(!base||!base.ok)return{ok:false,set:"--",value:"--"};const bs=Number(base.set),bv=Number(base.value);if(!Number.isFinite(bs)||!Number.isFinite(bv))return{ok:false,set:"--",value:"--"};const ss=[0,-297.98,-275.79,126.24,-143.67,218.31,-84.52,341.16];const vs=[0,.03,.06,.02,.08,.05,.11,.07];return{ok:true,set:format2(Math.max(0,bs+ss[index%ss.length])),value:format2(bv+vs[index%vs.length])}}
 function calculate2D(setValue,valueValue){const sd=String(setValue||"").replace(/\D/g,"");const vi=String(valueValue||"").split(".")[0].replace(/\D/g,"");if(!sd||!vi)return null;return sd.slice(-1)+vi.slice(-1)}
 function showBig2D(result){if(!/^\d{2}$/.test(result||""))return;const d=document.getElementById("resultDigits"),n=document.getElementById("noResult");n.style.display="none";d.style.display="flex";document.getElementById("digit1").textContent=result[0];document.getElementById("digit2").textContent=result[1]}
-function jumpTo2D(result){if(holdActive||jumpBusy||!/^\d{2}$/.test(result||""))return;const d=document.getElementById("resultDigits");const current=(document.getElementById("digit1").textContent||"")+(document.getElementById("digit2").textContent||"");if(current===result){showBig2D(result);return}jumpBusy=true;d.classList.remove("jump-in","jump-out");void d.offsetWidth;d.classList.add("jump-out");setTimeout(()=>{showBig2D(result);d.classList.remove("jump-out");void d.offsetWidth;d.classList.add("jump-in");setTimeout(()=>{d.classList.remove("jump-in");jumpBusy=false},320)},280)}
-function paintLiveMarket(animate=true){if(holdActive||!marketBase||!marketBase.ok)return;const live=makeJumpMarket(marketBase,marketJumpIndex);if(!live.ok)return;document.getElementById("setValue").textContent=live.set;document.getElementById("valueValue").textContent=live.value;const twoD=calculate2D(live.set,live.value);if(twoD){if(animate)jumpTo2D(twoD);else showBig2D(twoD)}}
-function startLiveMovement(){if(holdActive)return;paintLiveMarket(false);if(!marketJumpTimer)marketJumpTimer=setInterval(()=>{if(holdActive)return;marketJumpIndex=(marketJumpIndex+1)%100000;paintLiveMarket(true)},MARKET_JUMP_MS)}
-function stopLiveMovement(){if(marketJumpTimer){clearInterval(marketJumpTimer);marketJumpTimer=null}jumpBusy=false;const d=document.getElementById("resultDigits");if(d)d.classList.remove("jump-in","jump-out")}
+function paintLiveMarket(){if(holdActive||!marketBase||!marketBase.ok)return;const live=makeJumpMarket(marketBase,marketJumpIndex);if(!live.ok)return;document.getElementById("setValue").textContent=live.set;document.getElementById("valueValue").textContent=live.value;const twoD=calculate2D(live.set,live.value);if(twoD)showBig2D(twoD)}
+function blinkLiveNumbers(){if(holdActive)return;const node=document.getElementById("resultDigits");if(!node||node.style.display==="none")return;node.classList.remove("live-change");void node.offsetWidth;node.classList.add("live-change")}
+function startLiveMovement(){if(holdActive)return;paintLiveMarket();if(!marketJumpTimer)marketJumpTimer=setInterval(()=>{if(holdActive)return;marketJumpIndex=(marketJumpIndex+1)%100000;paintLiveMarket()},MARKET_JUMP_MS);if(!blinkTimer)blinkTimer=setInterval(blinkLiveNumbers,BLINK_INTERVAL_MS)}
+function stopLiveMovement(){if(marketJumpTimer){clearInterval(marketJumpTimer);marketJumpTimer=null}if(blinkTimer){clearInterval(blinkTimer);blinkTimer=null}}
 function showFinalWithRing(data){if(ringBusy||!data||!/^\d{2}$/.test(data.result||""))return;ringBusy=true;holdActive=true;stopLiveMovement();const digits=document.getElementById("resultDigits"),no=document.getElementById("noResult"),loader=document.getElementById("resultLoader");no.style.display="none";digits.style.opacity="0";setTimeout(()=>{digits.style.display="none";loader.classList.add("show")},220);setTimeout(()=>{loader.classList.remove("show");document.getElementById("digit1").textContent=data.result[0];document.getElementById("digit2").textContent=data.result[1];digits.style.display="flex";digits.style.opacity="1";document.getElementById("setValue").textContent=data.set||"--";document.getElementById("valueValue").textContent=data.value||"--";activeHoldRound=data.round_time;ringBusy=false},1200)}
 function updateRoundCards(results){if(!results)return;["r1100","r1300","r1500","r1700","r1900","r2100"].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=results[id]||"--"})}
 function renderState(data){if(!data)return;serverBase=Number(data.serverNow)||Date.now();perfBase=performance.now();marketBase=data.market&&data.market.ok?data.market:null;updateRoundCards(data.results);const newHold=Boolean(data.resultHold&&data.resultHold.active);if(newHold){const h=data.resultHold;if(!holdActive||activeHoldRound!==h.round_time)showFinalWithRing(h);else{holdActive=true;stopLiveMovement();showBig2D(h.result);document.getElementById("setValue").textContent=h.set||"--";document.getElementById("valueValue").textContent=h.value||"--"}return}if(holdActive&&!newHold){holdActive=false;activeHoldRound=null;marketJumpIndex=0;startLiveMovement();return}holdActive=false;startLiveMovement()}
@@ -482,7 +483,15 @@ async function adminPage(DB, requestedDate, message = "") {
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brazil 2D Admin</title>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f6f4}.admin{width:100%;max-width:560px;margin:auto;min-height:100vh;background:#fff}.header{background:#109447;color:#fff;padding:20px;text-align:center;font-size:23px;font-weight:900}.content{padding:18px}.notice{padding:11px 13px;border-radius:10px;background:#eef9f1;color:#0d7d3d;font-weight:800;margin-bottom:14px}.date-row{display:flex;gap:10px;align-items:end}.date-row>div{flex:1}label{display:block;font-weight:800;color:#333;margin:10px 0 6px}input{width:100%;height:45px;padding:0 12px;border:1px solid #ccc;border-radius:10px;font-size:16px}.round-card{border:1px solid #ddd;border-radius:18px;padding:14px;margin:14px 0;box-shadow:0 3px 12px rgba(0,0,0,.05)}.round-title{font-size:18px;font-weight:900;color:#109447;margin-bottom:10px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}.auto-result{height:50px;font-size:26px;font-weight:900;text-align:center;color:#109447;background:#f3fff7}.manual-result{font-size:22px;font-weight:900;text-align:center}.switch-row{display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:800}.switch-row input{width:20px;height:20px}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.buttons button{height:44px;border:0;border-radius:10px;color:#fff;font-weight:900;font-size:14px}.save{background:#109447}.publish{background:#176caf}.undo{background:#c62828}.full{grid-column:1/-1}.links{display:flex;gap:10px;margin-top:18px}.links a{flex:1;text-align:center;padding:13px;border-radius:10px;text-decoration:none;font-weight:800}.home{color:#0762a9;background:#edf6fc}.logout{color:#c62828;background:#fff0f0}.hint{font-size:12px;color:#777;margin-top:5px;line-height:1.4}.old-history{margin-top:28px;padding-top:20px;border-top:3px solid #e6edf3}.old-title{font-size:24px;font-weight:900;color:#176caf;margin-bottom:12px}.old-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.old-card{background:#f5f8fc;border-radius:14px;padding:12px}.old-card label{text-align:center;margin:0 0 8px;color:#111}.old-card input{text-align:center;font-size:24px;font-weight:900}.old-save{width:100%;height:52px;border:0;border-radius:12px;background:#f28a00;color:#fff;font-size:17px;font-weight:900;margin-top:14px}@media(max-width:420px){.two-col{grid-template-columns:1fr}.buttons{grid-template-columns:1fr}.full{grid-column:auto}.old-grid{grid-template-columns:1fr 1fr}}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f6f4}.admin{width:100%;max-width:560px;margin:auto;min-height:100vh;background:#fff}.header{background:#109447;color:#fff;padding:20px;text-align:center;font-size:23px;font-weight:900}.content{padding:18px}.notice{padding:11px 13px;border-radius:10px;background:#eef9f1;color:#0d7d3d;font-weight:800;margin-bottom:14px}.date-row{display:flex;gap:10px;align-items:end}.date-row>div{flex:1}label{display:block;font-weight:800;color:#333;margin:10px 0 6px}input{width:100%;height:45px;padding:0 12px;border:1px solid #ccc;border-radius:10px;font-size:16px}.round-card{border:1px solid #ddd;border-radius:18px;padding:14px;margin:14px 0;box-shadow:0 3px 12px rgba(0,0,0,.05)}.round-title{font-size:18px;font-weight:900;color:#109447;margin-bottom:10px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}.auto-result{height:50px;font-size:26px;font-weight:900;text-align:center;color:#109447;background:#f3fff7}.manual-result{font-size:22px;font-weight:900;text-align:center}.switch-row{display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:800}.switch-row input{width:20px;height:20px}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.buttons button{height:44px;border:0;border-radius:10px;color:#fff;font-weight:900;font-size:14px}.save{background:#109447}.publish{background:#176caf}.undo{background:#c62828}.full{grid-column:1/-1}.links{display:flex;gap:10px;margin-top:18px}.links a{flex:1;text-align:center;padding:13px;border-radius:10px;text-decoration:none;font-weight:800}.home{color:#0762a9;background:#edf6fc}.logout{color:#c62828;background:#fff0f0}
+.old-history-card{margin-top:28px;padding:18px;border-radius:18px;background:#f7faff;border:1px solid #e4ebf3}
+.old-history-title{font-size:24px;font-weight:900;color:#0864ac;margin-bottom:14px}
+.old-history-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.old-history-item{padding:11px;border-radius:14px;background:#f3f6fb;text-align:center}
+.old-time{font-size:14px;font-weight:900;color:#111;margin-bottom:8px}
+.old-history-item input{text-align:center;font-size:22px;font-weight:900}
+.old-save{width:100%;height:50px;margin-top:14px;border:0;border-radius:12px;background:#f28a00;color:#fff;font-size:17px;font-weight:900}
+.hint{font-size:12px;color:#777;margin-top:5px;line-height:1.4}@media(max-width:420px){.two-col{grid-template-columns:1fr}.buttons{grid-template-columns:1fr}.full{grid-column:auto}}
 </style>
 </head>
 <body><div class="admin"><div class="header">BRAZIL 2D ADMIN 🇧🇷</div><div class="content">
@@ -514,22 +523,24 @@ ${ROUNDS.map(round => {
     </div>
   </div>`;
 }).join("")}
-<div class="old-history">
-  <div class="old-title">Add Old History</div>
+
+<div class="old-history-card">
+  <div class="old-history-title">Add Old History</div>
   <form method="POST" action="/admin/save-old-history">
     <label>History Date</label>
-    <input type="date" name="history_date" required>
-    <div class="old-grid">
-      ${ROUNDS.map(round => `
-      <div class="old-card">
-        <label>${round.time}</label>
-        <input type="text" name="old_${round.id}" maxlength="2" inputmode="numeric" placeholder="--">
-      </div>`).join("")}
+    <input type="date" name="history_date" value="${escapeHtml(selectedDate)}" required>
+    <div class="old-history-grid">
+      ${ROUNDS.map(r => `
+        <div class="old-history-item">
+          <div class="old-time">${r.time}</div>
+          <input type="text" name="old_${r.id}" maxlength="2" inputmode="numeric" placeholder="--">
+        </div>
+      `).join("")}
     </div>
     <button class="old-save" type="submit">Save Old History</button>
   </form>
-  <div class="hint">အရင်နေ့ရက်ကိုရွေးပြီး သိမ်းချင်တဲ့ 2D Result တွေကို ထည့်ပါ။ 11:00 AM မှ 09:00 PM အထိ 6 ကြိမ်ပဲ ပါမယ်။</div>
 </div>
+
 <div class="links"><a class="home" href="/">Main Page</a><a class="logout" href="/admin/logout">Logout</a></div>
 </div></div>
 <script>
@@ -625,36 +636,72 @@ async function undoPublish(request, env) {
   return adminRedirect(request, resultDate, "Publish undone: " + roundTime);
 }
 
-async function saveOldHistory(request, env) {
-  const form = await request.formData();
-  const historyDate = String(form.get("history_date") || "").trim();
-  if (!validDate(historyDate)) return new Response("Invalid history date", { status: 400 });
-  if (historyDate >= getMyanmarDate()) return new Response("Old History အတွက် ဒီနေ့မတိုင်ခင် ရက်စွဲကို ရွေးပါ။", { status: 400, headers: { "Content-Type": "text/plain; charset=UTF-8" } });
-
-  let saved = 0;
-  for (const round of ROUNDS) {
-    const value = String(form.get("old_" + round.id) || "").trim();
-    if (!value) continue;
-    if (!valid2D(value)) return new Response(round.time + " Result ကို 2 လုံးတိတိထည့်ပါ။", { status: 400, headers: { "Content-Type": "text/plain; charset=UTF-8" } });
-    await env.DB.prepare(`
-      INSERT INTO results (result_date, round_time, result, set_value, market_value, updated_at)
-      VALUES (?, ?, ?, NULL, NULL, CURRENT_TIMESTAMP)
-      ON CONFLICT(result_date, round_time) DO UPDATE SET
-        result = excluded.result,
-        updated_at = CURRENT_TIMESTAMP
-    `).bind(historyDate, round.time, value).run();
-    saved++;
-  }
-
-  if (!saved) return new Response("History Result အနည်းဆုံးတစ်ခု ထည့်ပါ။", { status: 400, headers: { "Content-Type": "text/plain; charset=UTF-8" } });
-  return adminRedirect(request, getMyanmarDate(), `Old History သိမ်းပြီးပါပြီ — ${historyDate} (${saved} results)`);
-}
-
 function adminRedirect(request, date, msg) {
   const u = new URL("/admin", request.url);
   u.searchParams.set("date", date);
   u.searchParams.set("msg", msg);
   return Response.redirect(u.toString(), 303);
+}
+
+
+// ============================================================
+// SAVE OLD HISTORY
+// 6 rounds only: 11AM, 1PM, 3PM, 5PM, 7PM, 9PM
+// ============================================================
+
+async function saveOldHistory(request, env) {
+  const form = await request.formData();
+  const historyDate = String(form.get("history_date") || "").trim();
+
+  if (!validDate(historyDate)) {
+    return new Response("Invalid history date", {
+      status: 400,
+      headers: { "Content-Type": "text/plain; charset=UTF-8" }
+    });
+  }
+
+  let saved = 0;
+
+  for (const round of ROUNDS) {
+    const value = String(form.get("old_" + round.id) || "").trim();
+
+    if (!value) continue;
+
+    if (!valid2D(value)) {
+      return new Response(round.time + " result must be exactly 2 digits.", {
+        status: 400,
+        headers: { "Content-Type": "text/plain; charset=UTF-8" }
+      });
+    }
+
+    await env.DB.prepare(`
+      INSERT INTO results (
+        result_date,
+        round_time,
+        result,
+        set_value,
+        market_value,
+        updated_at
+      )
+      VALUES (?, ?, ?, NULL, NULL, CURRENT_TIMESTAMP)
+      ON CONFLICT(result_date, round_time) DO UPDATE SET
+        result = excluded.result,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(historyDate, round.time, value).run();
+
+    saved++;
+  }
+
+  const url = new URL("/admin", request.url);
+  url.searchParams.set("date", historyDate);
+  url.searchParams.set(
+    "msg",
+    saved > 0
+      ? "Old History သိမ်းပြီးပါပြီ (" + saved + " ကြိမ်)"
+      : "သိမ်းရန် 2D Result မထည့်ရသေးပါ။"
+  );
+
+  return Response.redirect(url.toString(), 303);
 }
 
 // ============================================================
