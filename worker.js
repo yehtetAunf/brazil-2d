@@ -62,6 +62,7 @@ const ROUNDS = [
 
 const RESULT_HOLD_SECONDS = 180; // 3 minutes
 const LIVE_REFRESH_MS = 10000;   // Crypto refresh 10 seconds
+const BLINK_INTERVAL_MS = 3500;  // Reference jump/blink rate
 
 
 export default {
@@ -1648,15 +1649,9 @@ body{
 
 body{
   color:#111;
-}
-
-/* USER APP COPY / SELECT PROTECTION */
-body, body *{
-  -webkit-user-select:none !important;
-  -moz-user-select:none !important;
-  -ms-user-select:none !important;
-  user-select:none !important;
-  -webkit-touch-callout:none !important;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
 }
 
 
@@ -1896,25 +1891,40 @@ body, body *{
 /* LIVE CHANGE */
 
 .live-change{
-  animation:liveBlink .82s ease-in-out 1;
+
+  animation:
+    liveBlink
+    .82s
+    ease-in-out
+    1;
 }
 
+
 @keyframes liveBlink{
-  0%{
-    opacity:1;
-    transform:scale(1);
-  }
-  45%{
-    opacity:0;
-    transform:scale(.96);
-  }
-  55%{
-    opacity:0;
-    transform:scale(.96);
-  }
+
+  0%,
   100%{
+
     opacity:1;
-    transform:scale(1);
+
+    transform:
+      scale(1);
+  }
+
+  45%{
+
+    opacity:.20;
+
+    transform:
+      scale(.95);
+  }
+
+  70%{
+
+    opacity:1;
+
+    transform:
+      scale(1.03);
   }
 }
 
@@ -2532,8 +2542,6 @@ onclick="location.href='/history'"
 const LIVE_REFRESH_MS =
   ${LIVE_REFRESH_MS};
 
-const BLINK_INTERVAL_MS = 3500;
-
 
 let serverBase =
   ${Number(
@@ -2548,6 +2556,16 @@ let perfBase =
 let holdActive =
   ${
     hold?.active
+      ? "true"
+      : "false"
+  };
+
+
+let roundReached =
+  ${
+    Object.values(state.results || {}).some(
+      value => valid2D(value)
+    )
       ? "true"
       : "false"
   };
@@ -2576,140 +2594,6 @@ let lastLive2D =
         : null
     )
   };
-
-
-let liveBlinkTimer = null;
-
-
-// ==========================================================
-// USER APP COPY / SELECT / LONG-PRESS PROTECTION
-// Admin page is NOT affected.
-// ==========================================================
-
-(function protectPublicAppContent(){
-
-  function clearSelection(){
-
-    const selection =
-      window.getSelection
-        ? window.getSelection()
-        : null;
-
-    if (
-      selection &&
-      selection.rangeCount
-    ) {
-      selection.removeAllRanges();
-    }
-  }
-
-
-  [
-    "copy",
-    "cut",
-    "contextmenu",
-    "selectstart",
-    "dragstart"
-  ].forEach(function(eventName){
-
-    document.addEventListener(
-      eventName,
-      function(event){
-
-        event.preventDefault();
-        event.stopPropagation();
-        clearSelection();
-
-        return false;
-      },
-      true
-    );
-  });
-
-
-  [
-    "touchend",
-    "pointerup",
-    "mouseup",
-    "dblclick"
-  ].forEach(function(eventName){
-
-    document.addEventListener(
-      eventName,
-      function(){
-
-        setTimeout(
-          clearSelection,
-          0
-        );
-
-        setTimeout(
-          clearSelection,
-          80
-        );
-      },
-      true
-    );
-  });
-
-
-  document.addEventListener(
-    "keydown",
-    function(event){
-
-      const key =
-        String(
-          event.key ||
-          ""
-        ).toLowerCase();
-
-      const shortcut =
-        event.ctrlKey ||
-        event.metaKey;
-
-      if (
-        shortcut &&
-        [
-          "a",
-          "c",
-          "x",
-          "s",
-          "u",
-          "p"
-        ].includes(
-          key
-        )
-      ) {
-
-        event.preventDefault();
-        event.stopPropagation();
-        clearSelection();
-
-        return false;
-      }
-    },
-    true
-  );
-
-
-  document.addEventListener(
-    "selectionchange",
-    clearSelection
-  );
-
-
-  document
-    .querySelectorAll(
-      "img,a,button"
-    )
-    .forEach(function(node){
-
-      node.setAttribute(
-        "draggable",
-        "false"
-      );
-    });
-})();
 
 
 // ==========================================================
@@ -2788,6 +2672,8 @@ function updateClock(){
       "dateTime"
     )
     .textContent =
+      (roundReached ? "✓ " : "") +
+      "Updated " +
       date +
       " | " +
       time;
@@ -2801,6 +2687,17 @@ setInterval(
 
 
 updateClock();
+
+
+// Reference jump rate: every 3.5 seconds
+setInterval(
+  function(){
+    if (!holdActive && document.visibilityState === "visible") {
+      animateLiveChange();
+    }
+  },
+  ${BLINK_INTERVAL_MS}
+);
 
 
 // ==========================================================
@@ -2912,77 +2809,6 @@ function animateLiveChange(){
       )
   );
 }
-
-
-
-// ==========================================================
-// REFERENCE JUMP RATE
-// Every 3.5 seconds, same cadence as the supplied NZ sample.
-// Only USER live 2D + SET/VALUE are animated.
-// ==========================================================
-
-function startReferenceJumpCycle(){
-
-  if (
-    liveBlinkTimer
-  ) {
-    return;
-  }
-
-
-  liveBlinkTimer =
-    setInterval(
-      function(){
-
-        if (
-          holdActive ||
-          ringBusy
-        ) {
-          return;
-        }
-
-
-        const result =
-          document
-            .getElementById(
-              "resultDigits"
-            );
-
-
-        const set =
-          document
-            .getElementById(
-              "setValue"
-            );
-
-
-        const value =
-          document
-            .getElementById(
-              "valueValue"
-            );
-
-
-        if (
-          !result ||
-          !set ||
-          !value ||
-          result.style.display === "none" ||
-          set.textContent.trim() === "--" ||
-          value.textContent.trim() === "--"
-        ) {
-          return;
-        }
-
-
-        animateLiveChange();
-      },
-      BLINK_INTERVAL_MS
-    );
-}
-
-
-startReferenceJumpCycle();
 
 
 // ==========================================================
@@ -3193,6 +3019,13 @@ function renderState(
   updateRoundCards(
     data.results
   );
+
+
+  roundReached =
+    Object.values(data.results || {})
+      .some(function(value){
+        return /^\d{2}$/.test(String(value || ""));
+      });
 
 
   const newHold =
@@ -3446,6 +3279,31 @@ document.addEventListener(
     ) {
 
       loadLive();
+    }
+  }
+);
+
+
+// USER PAGE COPY PROTECTION — Admin is unaffected
+["copy","cut","contextmenu","selectstart","dragstart"].forEach(
+  function(eventName){
+    document.addEventListener(
+      eventName,
+      function(event){ event.preventDefault(); },
+      { passive:false }
+    );
+  }
+);
+
+document.addEventListener(
+  "keydown",
+  function(event){
+    const key = String(event.key || "").toLowerCase();
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      ["c","x","a","s","u","p"].includes(key)
+    ) {
+      event.preventDefault();
     }
   }
 );
