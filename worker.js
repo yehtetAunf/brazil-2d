@@ -4443,23 +4443,6 @@ formnovalidate
 </form>
 
 
-<div class="section-title">
-
-သတ်မှတ်ထားသော Result များ
-
-</div>
-
-
-${
-  scheduleList ||
-  `
-  <div class="empty">
-  ဒီနေ့အတွက် Schedule မသတ်မှတ်ရသေးပါ။
-  </div>
-  `
-}
-
-
 
 <!-- =========================================================
      ADD OLD HISTORY — 6 ROUNDS ONLY
@@ -4542,6 +4525,13 @@ ${round.time}
 <input
 type="text"
 name="old_${round.id}"
+value="${escapeHtml(
+  valid2D(
+    rowMap.get(round.time)?.result
+  )
+    ? rowMap.get(round.time).result
+    : ""
+)}"
 maxlength="2"
 inputmode="numeric"
 placeholder="--"
@@ -5486,6 +5476,28 @@ async function saveOldHistory(
     .run();
 
 
+    // Old History is admin-only by default.
+    // If this round already has a real schedule control, do not overwrite it.
+    await env.DB.prepare(`
+      INSERT INTO publish_controls (
+        result_date,
+        round_time,
+        auto_publish,
+        manual_publish,
+        suppressed,
+        published_at,
+        updated_at
+      )
+      VALUES (?, ?, 0, 0, 1, NULL, CURRENT_TIMESTAMP)
+      ON CONFLICT(result_date, round_time) DO NOTHING
+    `)
+    .bind(
+      historyDate,
+      round.time
+    )
+    .run();
+
+
     savedCount++;
   }
 
@@ -5528,399 +5540,160 @@ async function saveOldHistory(
 
 async function historyPage(DB) {
 
+  const today = getMyanmarDate();
+  const nowSeconds = getCurrentSeconds();
+
   const query =
     await DB.prepare(`
       SELECT
-
         result_date,
-
         round_time,
-
         result
-
       FROM results
-
       ORDER BY
-
         result_date DESC,
-
         CASE round_time
-
-          WHEN '11:00 AM'
-          THEN 1
-
-          WHEN '01:00 PM'
-          THEN 2
-
-          WHEN '03:00 PM'
-          THEN 3
-
-          WHEN '05:00 PM'
-          THEN 4
-
-          WHEN '07:00 PM'
-          THEN 5
-
-          WHEN '09:00 PM'
-          THEN 6
-
+          WHEN '11:00 AM' THEN 1
+          WHEN '01:00 PM' THEN 2
+          WHEN '03:00 PM' THEN 3
+          WHEN '05:00 PM' THEN 4
+          WHEN '07:00 PM' THEN 5
+          WHEN '09:00 PM' THEN 6
           ELSE 99
-
         END
-    `)
+    `).all();
 
+  const controlQuery =
+    await DB.prepare(`
+      SELECT
+        round_time,
+        auto_publish,
+        manual_publish,
+        suppressed,
+        published_at
+      FROM publish_controls
+      WHERE result_date = ?
+    `)
+    .bind(today)
     .all();
 
+  const todayControls = new Map(
+    (controlQuery.results || []).map(row => [row.round_time, row])
+  );
 
-  const grouped =
-    {};
+  const grouped = {};
 
+  for (const row of query.results || []) {
 
-  for (
-    const row
-    of query.results ||
-    []
-  ) {
-
-    if (
-      !grouped[
-        row.result_date
-      ]
-    ) {
-
-      grouped[
-        row.result_date
-      ] =
-        {};
+    if (!valid2D(row.result)) {
+      continue;
     }
 
-
-    if (
-      valid2D(
-        row.result
-      )
-    ) {
-
-      grouped[
-        row.result_date
-      ][
-        row.round_time
-      ] =
-        row.result;
+    // Future dates are never visible on the User History page.
+    if (row.result_date > today) {
+      continue;
     }
+
+    // For today, only results that are actually published are visible.
+    // Pre-set/Admin Old History numbers remain private until release/publish.
+    if (row.result_date === today) {
+
+      const round = ROUNDS.find(r => r.time === row.round_time);
+      const control = todayControls.get(row.round_time);
+
+      if (!round || !control) {
+        continue;
+      }
+
+      const suppressed = Number(control.suppressed) === 1;
+      const manualPublished = Number(control.manual_publish) === 1;
+      const autoPublished =
+        Number(control.auto_publish) === 1 &&
+        nowSeconds >= roundReleaseSeconds(round);
+
+      if (suppressed || (!manualPublished && !autoPublished)) {
+        continue;
+      }
+    }
+
+    if (!grouped[row.result_date]) {
+      grouped[row.result_date] = {};
+    }
+
+    grouped[row.result_date][row.round_time] = row.result;
   }
 
-
   const cards =
-    Object
-      .keys(
-        grouped
-      )
-      .map(
-        date => `
+    Object.keys(grouped)
+      .sort((a, b) => b.localeCompare(a))
+      .map(date => `
 
 <div class="day">
 
-
 <div class="date">
-
 ${escapeHtml(date)}
-
 </div>
-
 
 <div class="rounds">
 
+${ROUNDS.map(round => `
 
-${ROUNDS.map(
-  round => `
-
-<div
-class="round ${round.color}"
->
-
+<div class="round ${round.color}">
 
 <div class="time">
-
 ${round.time}
-
 </div>
-
 
 <div class="number">
-
-${escapeHtml(
-  grouped[
-    date
-  ][
-    round.time
-  ] ||
-  "--"
-)}
+${escapeHtml(grouped[date][round.time] || "--")}
+</div>
 
 </div>
 
+`).join("")}
 
 </div>
 
-`
-).join("")}
-
-
 </div>
 
-
-</div>
-
-`
-      )
+`)
       .join("");
 
-
   return `<!DOCTYPE html>
-
 <html>
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width,initial-scale=1">
-
-<title>
-Brazil 2D History
-</title>
-
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Brazil 2D History</title>
 <style>
-
-*{
-  box-sizing:border-box;
-}
-
-body{
-
-  margin:0;
-
-  font-family:Arial;
-
-  background:#f2f6f3;
-
-  color:#111;
-}
-
-.page{
-
-  max-width:480px;
-
-  min-height:100vh;
-
-  margin:auto;
-
-  background:#fff;
-}
-
-.header{
-
-  background:#109447;
-
-  color:#fff;
-
-  min-height:66px;
-
-  display:flex;
-
-  align-items:center;
-
-  padding:
-    0
-    18px;
-}
-
-.back{
-
-  font-size:34px;
-
-  margin-right:15px;
-
-  cursor:pointer;
-}
-
-.title{
-
-  font-size:20px;
-
-  font-weight:900;
-}
-
-.content{
-  padding:16px;
-}
-
-.day{
-
-  margin-bottom:20px;
-
-  background:#fff;
-
-  border-radius:18px;
-
-  box-shadow:
-    0
-    4px
-    16px
-    rgba(
-      0,
-      0,
-      0,
-      .08
-    );
-
-  padding:15px;
-}
-
-.date{
-
-  color:#0864ac;
-
-  font-size:19px;
-
-  font-weight:900;
-
-  margin-bottom:14px;
-}
-
-.rounds{
-
-  display:grid;
-
-  grid-template-columns:
-    1fr
-    1fr;
-
-  gap:8px;
-}
-
-.round{
-
-  border:
-    1.5px solid;
-
-  border-radius:12px;
-
-  padding:10px;
-
-  text-align:center;
-
-  background:#fff;
-}
-
-.round.green{
-  border-color:#109447;
-}
-
-.round.yellow{
-  border-color:#e8c327;
-}
-
-.round.blue{
-  border-color:#176caf;
-}
-
-.time{
-
-  font-size:12px;
-
-  font-weight:800;
-
-  margin-bottom:5px;
-}
-
-.round.green .time{
-  color:#109447;
-}
-
-.round.yellow .time{
-  color:#e8b900;
-}
-
-.round.blue .time{
-  color:#0762a9;
-}
-
-.number{
-
-  font-size:27px;
-
-  font-weight:900;
-}
-
-.empty{
-
-  text-align:center;
-
-  color:#999;
-
-  padding:
-    80px
-    20px;
-}
-
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial;background:#f2f6f3;color:#111}
+.page{max-width:480px;min-height:100vh;margin:auto;background:#fff}
+.header{background:#109447;color:#fff;min-height:66px;display:flex;align-items:center;padding:0 18px}
+.back{font-size:34px;margin-right:15px;cursor:pointer}
+.title{font-size:20px;font-weight:900}
+.content{padding:16px}
+.day{margin-bottom:20px;background:#fff;border-radius:18px;box-shadow:0 4px 16px rgba(0,0,0,.08);padding:15px}
+.date{color:#0864ac;font-size:19px;font-weight:900;margin-bottom:14px}
+.rounds{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.round{border:1.5px solid;border-radius:12px;padding:10px;text-align:center;background:#fff}
+.round.green{border-color:#109447}.round.yellow{border-color:#e8c327}.round.blue{border-color:#176caf}
+.time{font-size:12px;font-weight:800;margin-bottom:5px}
+.round.green .time{color:#109447}.round.yellow .time{color:#e8b900}.round.blue .time{color:#0762a9}
+.number{font-size:27px;font-weight:900}
+.empty{text-align:center;color:#999;padding:80px 20px}
 </style>
-
 </head>
-
-
 <body>
-
-
 <div class="page">
-
-
 <div class="header">
-
-
-<div
-class="back"
-onclick="location.href='/'"
->
-
-‹
-
+<div class="back" onclick="location.href='/'">‹</div>
+<div class="title">BRAZIL 2D HISTORY 🇧🇷</div>
 </div>
-
-
-<div class="title">
-
-BRAZIL 2D HISTORY 🇧🇷
-
-</div>
-
-
-</div>
-
-
 <div class="content">
-
-
-${
-  cards ||
-  `
-  <div class="empty">
-  No history data yet.
-  </div>
-  `
-}
-
-
+${cards || `<div class="empty">No history data yet.</div>`}
 </div>
-
-
 </div>
-
-
 </body>
-
 </html>`;
-        }
+}
