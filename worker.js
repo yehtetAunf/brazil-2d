@@ -311,6 +311,39 @@ export default {
       }
 
 
+      // ======================================================
+      // SAVE OLD HISTORY
+      // ======================================================
+
+      if (
+        url.pathname === "/admin/save-old-history" &&
+        request.method === "POST"
+      ) {
+
+        if (
+          !(await isAdmin(
+            request,
+            env
+          ))
+        ) {
+
+          return Response.redirect(
+            new URL(
+              "/admin",
+              request.url
+            ).toString(),
+            303
+          );
+        }
+
+
+        return saveOldHistory(
+          request,
+          env
+        );
+      }
+
+
       return new Response(
         "Not Found",
         {
@@ -4427,6 +4460,129 @@ ${
 }
 
 
+
+<!-- =========================================================
+     ADD OLD HISTORY — 6 ROUNDS ONLY
+========================================================= -->
+
+<div
+style="
+  margin-top:30px;
+  padding:18px;
+  border:1px solid #e3e8ef;
+  border-radius:20px;
+  background:#ffffff;
+"
+>
+
+<div
+style="
+  color:#0864ac;
+  font-size:26px;
+  font-weight:900;
+  margin-bottom:18px;
+"
+>
+Add Old History
+</div>
+
+
+<form
+method="POST"
+action="/admin/save-old-history"
+>
+
+
+<label>
+History Date
+</label>
+
+
+<input
+type="date"
+name="history_date"
+value="${escapeHtml(selectedDate)}"
+required
+>
+
+
+<div
+style="
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:14px;
+"
+>
+
+
+${ROUNDS.map(round => `
+
+<div
+style="
+  background:#f4f7fb;
+  border-radius:16px;
+  padding:13px;
+  text-align:center;
+"
+>
+
+<div
+style="
+  color:#111;
+  font-size:16px;
+  font-weight:900;
+  margin-bottom:10px;
+"
+>
+${round.time}
+</div>
+
+
+<input
+type="text"
+name="old_${round.id}"
+maxlength="2"
+inputmode="numeric"
+placeholder="--"
+style="
+  text-align:center;
+  font-size:24px;
+  font-weight:900;
+"
+>
+
+
+</div>
+
+`).join("")}
+
+
+</div>
+
+
+<button
+type="submit"
+style="
+  width:100%;
+  min-height:54px;
+  margin-top:16px;
+  border:0;
+  border-radius:14px;
+  background:#f28500;
+  color:#fff;
+  font-size:18px;
+  font-weight:900;
+"
+>
+Save Old History
+</button>
+
+
+</form>
+
+</div>
+
 <div class="links">
 
 <a
@@ -5192,6 +5348,168 @@ function adminRedirect(
   url.searchParams.set(
     "msg",
     message
+  );
+
+
+  return Response.redirect(
+    url.toString(),
+    303
+  );
+}
+
+
+
+// ============================================================
+// SAVE OLD HISTORY
+// 6 Rounds only: 11AM / 1PM / 3PM / 5PM / 7PM / 9PM
+// ============================================================
+
+async function saveOldHistory(
+  request,
+  env
+) {
+
+  const form =
+    await request.formData();
+
+
+  const historyDate =
+    String(
+      form.get(
+        "history_date"
+      ) ||
+      ""
+    ).trim();
+
+
+  if (
+    !validDate(
+      historyDate
+    )
+  ) {
+
+    return new Response(
+      "Invalid history date",
+      {
+        status: 400,
+        headers: {
+          "Content-Type":
+            "text/plain; charset=UTF-8"
+        }
+      }
+    );
+  }
+
+
+  let savedCount = 0;
+
+
+  for (
+    const round
+    of ROUNDS
+  ) {
+
+    const result =
+      String(
+        form.get(
+          "old_" +
+          round.id
+        ) ||
+        ""
+      ).trim();
+
+
+    if (!result) {
+      continue;
+    }
+
+
+    if (
+      !valid2D(
+        result
+      )
+    ) {
+
+      return new Response(
+        round.time +
+        " result must be exactly 2 digits.",
+        {
+          status: 400,
+          headers: {
+            "Content-Type":
+              "text/plain; charset=UTF-8"
+          }
+        }
+      );
+    }
+
+
+    await env.DB.prepare(`
+      INSERT INTO results (
+        result_date,
+        round_time,
+        result,
+        set_value,
+        market_value,
+        updated_at
+      )
+
+      VALUES (
+        ?,
+        ?,
+        ?,
+        NULL,
+        NULL,
+        CURRENT_TIMESTAMP
+      )
+
+      ON CONFLICT(
+        result_date,
+        round_time
+      )
+
+      DO UPDATE SET
+
+        result =
+          excluded.result,
+
+        updated_at =
+          CURRENT_TIMESTAMP
+    `)
+
+    .bind(
+      historyDate,
+      round.time,
+      result
+    )
+
+    .run();
+
+
+    savedCount++;
+  }
+
+
+  const url =
+    new URL(
+      "/admin",
+      request.url
+    );
+
+
+  url.searchParams.set(
+    "date",
+    historyDate
+  );
+
+
+  url.searchParams.set(
+    "msg",
+    savedCount > 0
+      ? "Old History သိမ်းပြီးပါပြီ — " +
+        savedCount +
+        " ကြိမ်"
+      : "Old History Result မထည့်ရသေးပါ။"
   );
 
 
