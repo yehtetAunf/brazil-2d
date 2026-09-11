@@ -102,7 +102,19 @@ export default {
           )
         );
       }
+// ======================================================
+// APK DOWNLOAD
+// ======================================================
 
+if (
+  url.pathname === "/download" &&
+  request.method === "GET"
+) {
+  return Response.redirect(
+    "https://github.com/yehtetAunf/brazil-2d/releases/download/v1.0.0/app-debug.apk",
+    302
+  );
+}
 
       // ======================================================
       // LIVE API
