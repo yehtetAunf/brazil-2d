@@ -16,7 +16,7 @@
 // -> Publish Now
 // -> Undo Publish
 //
-// Final Result Hold = 3 Minutes
+// Final Result Hold = 2 Minutes
 // ============================================================
 
 
@@ -60,7 +60,7 @@ const ROUNDS = [
 ];
 
 
-const RESULT_HOLD_SECONDS = 180; // 3 minutes
+const RESULT_HOLD_SECONDS = 120; // 2 minutes
 const LIVE_REFRESH_MS = 10000;   // Crypto refresh 10 seconds
 const BLINK_INTERVAL_MS = 3500;  // Reference jump/blink rate
 
@@ -519,6 +519,32 @@ function valid2D(value) {
       ""
     )
   );
+}
+
+
+// Small inline Brazil flag used while a round result is not released yet.
+function brazilFlagMarkup() {
+  return `
+    <span class="round-flag" aria-label="Brazil 2D">
+      <svg viewBox="0 0 36 24" role="img" aria-hidden="true">
+        <rect width="36" height="24" rx="4" fill="#169b62"/>
+        <path d="M18 3 L31 12 L18 21 L5 12 Z" fill="#ffdf00"/>
+        <circle cx="18" cy="12" r="5.2" fill="#002776"/>
+        <path d="M13.2 10.7 Q18 8.4 22.8 10.7" fill="none" stroke="#fff" stroke-width="0.8"/>
+      </svg>
+    </span>`;
+}
+
+
+function roundResultMarkup(value) {
+  if (!valid2D(value)) {
+    return brazilFlagMarkup();
+  }
+
+  const result = String(value);
+
+  return `
+    <span class="round-digit round-digit-one">${result[0]}</span><span class="round-digit round-digit-two">${result[1]}</span>`;
 }
 
 
@@ -1672,6 +1698,7 @@ body{
   max-width:480px;
   min-height:100dvh;
   margin:0 auto;
+  padding-top:8px;
   background:#fff;
   overflow:hidden;
 }
@@ -1741,7 +1768,7 @@ body{
 
 .hero{
   position:relative;
-  height:215px;
+  height:205px;
   text-align:center;
   overflow:hidden;
 
@@ -2190,13 +2217,46 @@ body{
 
 .round-number{
 
-  color:#0a0a0a;
-
   font-size:29px;
 
   line-height:1;
 
   font-weight:900;
+
+  min-height:30px;
+
+  display:flex;
+
+  align-items:center;
+
+  justify-content:center;
+}
+
+.round-digit{
+  display:inline-block;
+}
+
+.round-digit-one{
+  color:#109447;
+}
+
+.round-digit-two{
+  color:#ffc400;
+}
+
+.round-flag{
+  width:42px;
+  height:28px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.round-flag svg{
+  width:38px;
+  height:25px;
+  display:block;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.12));
 }
 
 
@@ -2278,7 +2338,7 @@ body{
   }
 
   .hero{
-    height:188px;
+    height:180px;
   }
 
   .live-result-box{
@@ -2516,11 +2576,10 @@ ${round.time}
 class="round-number"
 id="${round.id}"
 >
-${escapeHtml(
+${roundResultMarkup(
   state.results[
     round.id
-  ] ||
-  "--"
+  ]
 )}
 </div>
 
@@ -2575,12 +2634,28 @@ let holdActive =
 
 let roundReached =
   ${
-    Object.values(state.results || {}).some(
-      value => valid2D(value)
-    )
+    hold?.active
       ? "true"
       : "false"
   };
+
+
+let holdRemainingSeconds =
+  ${
+    hold?.active
+      ? Number(hold.seconds_remaining || 0)
+      : 0
+  };
+
+
+let holdEndAt =
+  holdActive
+    ? estimatedServerNow() + (holdRemainingSeconds * 1000)
+    : 0;
+
+
+let holdExpiryReloaded =
+  false;
 
 
 let activeHoldRound =
@@ -2679,16 +2754,48 @@ function updateClock(){
     );
 
 
+  let remaining = 0;
+
+  if (holdActive) {
+    remaining = Math.max(
+      0,
+      Math.ceil((holdEndAt - estimatedServerNow()) / 1000)
+    );
+
+    holdRemainingSeconds = remaining;
+
+    if (remaining === 0 && !holdExpiryReloaded) {
+      holdExpiryReloaded = true;
+      holdActive = false;
+      activeHoldRound = null;
+      roundReached = false;
+      loadLive();
+    }
+  }
+
   document
     .getElementById(
       "dateTime"
     )
     .textContent =
-      (roundReached ? "✓ " : "") +
+      (holdActive ? "✓ " : "") +
       "Updated " +
       date +
       " | " +
-      time;
+      time +
+      (holdActive ? " | " + formatCountdown(remaining) : "");
+}
+
+
+function formatCountdown(totalSeconds){
+
+  const seconds = Math.max(0, Number(totalSeconds) || 0);
+
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+
+  return String(minutes).padStart(2, "0") + ":" +
+    String(remainder).padStart(2, "0");
 }
 
 
@@ -2996,12 +3103,31 @@ function updateRoundCards(
 
     if (element) {
 
-      element.textContent =
+      const value =
         results?.[id] ||
-        "--";
+        "";
+
+      if (/^\d{2}$/.test(String(value))) {
+        element.innerHTML =
+          '<span class="round-digit round-digit-one">' +
+          String(value)[0] +
+          '</span><span class="round-digit round-digit-two">' +
+          String(value)[1] +
+          '</span>';
+      } else {
+        element.innerHTML =
+          '<span class="round-flag" aria-label="Brazil 2D">' +
+          '<svg viewBox="0 0 36 24" role="img" aria-hidden="true">' +
+          '<rect width="36" height="24" rx="4" fill="#169b62"/>' +
+          '<path d="M18 3 L31 12 L18 21 L5 12 Z" fill="#ffdf00"/>' +
+          '<circle cx="18" cy="12" r="5.2" fill="#002776"/>' +
+          '<path d="M13.2 10.7 Q18 8.4 22.8 10.7" fill="none" stroke="#fff" stroke-width="0.8"/>' +
+          '</svg></span>';
+      }
     }
   }
 }
+
 
 
 // ==========================================================
@@ -3033,13 +3159,6 @@ function renderState(
   );
 
 
-  roundReached =
-    Object.values(data.results || {})
-      .some(function(value){
-        return /^\d{2}$/.test(String(value || ""));
-      });
-
-
   const newHold =
     Boolean(
       data.resultHold &&
@@ -3055,6 +3174,16 @@ function renderState(
 
     const hold =
       data.resultHold;
+
+
+    holdActive = true;
+    roundReached = true;
+    holdRemainingSeconds =
+      Number(hold.seconds_remaining || 0);
+    holdEndAt =
+      Number(data.serverNow || Date.now()) +
+      (holdRemainingSeconds * 1000);
+    holdExpiryReloaded = false;
 
 
     if (
@@ -3113,6 +3242,14 @@ function renderState(
     holdActive =
       false;
 
+    roundReached =
+      false;
+
+    holdRemainingSeconds =
+      0;
+
+    holdEndAt =
+      0;
 
     activeHoldRound =
       null;
