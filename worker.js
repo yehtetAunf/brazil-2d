@@ -1854,7 +1854,8 @@ body{
 
   justify-content:center;
 
-  padding-bottom:36px;
+  padding-top:14px;
+  padding-bottom:22px;
 }
 
 
@@ -2332,6 +2333,10 @@ body{
 @media(
   max-height:700px
 ){
+
+  .app{
+    padding-top:10px;
+  }
 
   .live-header{
     height:52px;
