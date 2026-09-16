@@ -3159,8 +3159,28 @@ function renderState(
     performance.now();
 
 
+  // Update round boxes. During the 2 minute final hold,
+  // make sure the published round also replaces the flag.
+  const roundResults = {
+    ...(data.results || {})
+  };
+
+  if (
+    data.resultHold &&
+    data.resultHold.active &&
+    data.resultHold.round_time &&
+    /^\d{2}$/.test(String(data.resultHold.result || ""))
+  ) {
+    const activeRound = ROUNDS.find(
+      r => r.time === data.resultHold.round_time
+    );
+    if (activeRound) {
+      roundResults[activeRound.id] = data.resultHold.result;
+    }
+  }
+
   updateRoundCards(
-    data.results
+    roundResults
   );
 
 
