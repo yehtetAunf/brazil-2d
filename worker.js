@@ -3172,7 +3172,10 @@ function renderState(
     /^\d{2}$/.test(String(data.resultHold.result || ""))
   ) {
     const activeRound = ROUNDS.find(
-      r => r.time === data.resultHold.round_time
+      r =>
+        r.time === data.resultHold.round_time ||
+        r.id === data.resultHold.round_time ||
+        r.time.replace(/\\s/g, "") === String(data.resultHold.round_time).replace(/\\s/g, "")
     );
     if (activeRound) {
       roundResults[activeRound.id] = data.resultHold.result;
