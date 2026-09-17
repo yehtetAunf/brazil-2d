@@ -3169,16 +3169,32 @@ function renderState(
     data.resultHold &&
     data.resultHold.active &&
     data.resultHold.round_time &&
-    /^\d{2}$/.test(String(data.resultHold.result || ""))
+    /^\d{2}$/.test(String(data.resultHold.result || "").trim())
   ) {
-    const activeRound = ROUNDS.find(
-      r =>
-        r.time === data.resultHold.round_time ||
-        r.id === data.resultHold.round_time ||
-        r.time.replace(/\\s/g, "") === String(data.resultHold.round_time).replace(/\\s/g, "")
-    );
+    // Normalize all supported round-time formats before matching.
+    // The previous code used /\\s/g, which matches a literal "\\s"
+    // instead of whitespace and could leave the flag visible during hold.
+    const normalizeRoundTime = value =>
+      String(value || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "")
+        .replace(/\./g, ":");
+
+    const holdTime = normalizeRoundTime(data.resultHold.round_time);
+
+    const activeRound = ROUNDS.find(r => {
+      const roundTime = normalizeRoundTime(r.time);
+      return (
+        r.id === String(data.resultHold.round_time).trim() ||
+        roundTime === holdTime ||
+        roundTime.replace(/:00(?=AM|PM)/, "") === holdTime ||
+        roundTime.replace(/:00(?=AM|PM)/, "") === holdTime.replace(/:00(?=AM|PM)/, "")
+      );
+    });
+
     if (activeRound) {
-      roundResults[activeRound.id] = data.resultHold.result;
+      roundResults[activeRound.id] = String(data.resultHold.result).trim();
     }
   }
 
