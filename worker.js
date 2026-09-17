@@ -536,8 +536,13 @@ function brazilFlagMarkup() {
 }
 
 
-function roundResultMarkup(value) {
+function roundResultMarkup(value, round, nowSeconds = getCurrentSeconds()) {
   if (!valid2D(value)) {
+    // Show the flag only before the round release time.
+    // Once the round time is reached, never leave the pre-result flag visible.
+    if (round && nowSeconds >= roundReleaseSeconds(round)) {
+      return '<span class="round-empty">--</span>';
+    }
     return brazilFlagMarkup();
   }
 
@@ -2584,7 +2589,8 @@ id="${round.id}"
 ${roundResultMarkup(
   state.results[
     round.id
-  ]
+  ],
+  round
 )}
 </div>
 
@@ -3081,7 +3087,8 @@ function showFinalWithRing(
 // ==========================================================
 
 function updateRoundCards(
-  results
+  results,
+  nowSeconds = getCurrentSeconds()
 ){
 
   const ids = [
@@ -3120,14 +3127,17 @@ function updateRoundCards(
           String(value)[1] +
           '</span>';
       } else {
-        element.innerHTML =
-          '<span class="round-flag" aria-label="Brazil 2D">' +
-          '<svg viewBox="0 0 36 24" role="img" aria-hidden="true">' +
-          '<rect width="36" height="24" rx="4" fill="#169b62"/>' +
-          '<path d="M18 3 L31 12 L18 21 L5 12 Z" fill="#ffdf00"/>' +
-          '<circle cx="18" cy="12" r="5.2" fill="#002776"/>' +
-          '<path d="M13.2 10.7 Q18 8.4 22.8 10.7" fill="none" stroke="#fff" stroke-width="0.8"/>' +
-          '</svg></span>';
+        const round = ROUNDS.find(r => r.id === id);
+        const released = round && nowSeconds >= roundReleaseSeconds(round);
+        element.innerHTML = released
+          ? '<span class="round-empty">--</span>'
+          : '<span class="round-flag" aria-label="Brazil 2D">' +
+            '<svg viewBox="0 0 36 24" role="img" aria-hidden="true">' +
+            '<rect width="36" height="24" rx="4" fill="#169b62"/>' +
+            '<path d="M18 3 L31 12 L18 21 L5 12 Z" fill="#ffdf00"/>' +
+            '<circle cx="18" cy="12" r="5.2" fill="#002776"/>' +
+            '<path d="M13.2 10.7 Q18 8.4 22.8 10.7" fill="none" stroke="#fff" stroke-width="0.8"/>' +
+            '</svg></span>';
       }
     }
   }
@@ -3199,7 +3209,8 @@ function renderState(
   }
 
   updateRoundCards(
-    roundResults
+    roundResults,
+    getCurrentSeconds()
   );
 
 
